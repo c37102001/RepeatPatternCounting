@@ -68,14 +68,14 @@ _showImg = {'original_image': False, 'original_edge': False, 'enhanced_edge': Fa
             'obvious_histogram': False, 'each_group_result': False, 'result_obvious': False,
             'final_each_group_result': False, 'final_result': False}
 _writeImg = {'original_image': False, 'original_edge': False, 'enhanced_edge': False, 'original_contour': False,
-             'contour_filtered': False, 'size': False, 'shape': False, 'color': False, 'cluster_histogram': False,
+             'contour_filtered': False, 'size': True, 'shape': True, 'color': True, 'cluster_histogram': False,
              'original_result': False, 'each_obvious_result': False, 'combine_obvious_result': False,
              'obvious_histogram': False, 'each_group_result': False, 'result_obvious': False,
              'final_each_group_result': False, 'final_result': True}
 
 _show_resize = [(720, 'height'), (1200, 'width')][0]
 
-test_one_img = {'test': True, 'filename': 'IMG_ (105).jpg'}
+test_one_img = {'test': True, 'filename': 'IMG_ (33).jpg'}
 
 
 def main():
