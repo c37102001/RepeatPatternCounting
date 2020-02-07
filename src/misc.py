@@ -1,6 +1,6 @@
 import numpy as np
 import cv2
-from contour import check_property, check_overlap
+from contour import check_property, check_simple_overlap
 from cluster import Hierarchical_clustering
 import get_contour_feature
 from ipdb import set_trace as pdb
@@ -24,35 +24,43 @@ class ContourDrawer:
         cv2.drawContours(self.contour_image, contour, -1, color, 2)
         self.color_index += 1
 
-    def save(self, info):
-        img_path = '{}{}_{}.jpg'.format(self.output_path, self.img_name, info)
+    def save(self, desc):
+        img_path = '{}{}_{}.jpg'.format(self.output_path, self.img_name, desc)
         cv2.imwrite(img_path, self.contour_image)
 
 
-def check_and_cluster(image_resi, contours, drawer, edge_type, _writeImg):
+def check_and_cluster(image_resi, contours, drawer, edge_type, do_draw=False):
     drawer.image_resi_shape = image_resi.shape
 
-    if _writeImg['original_contour'] or True:
+    if do_draw:
         drawer.reset()
         for contour in contours:
             drawer.draw([contour])
-        info = 'd_OriginContour_{}'.format(edge_type)
-        drawer.save(info)
+        desc = 'd_OriginContour_{}'.format(edge_type)
+        drawer.save(desc)
 
     re_height, re_width = image_resi.shape[:2]
     contours = check_property(contours, re_height, re_width)
-    contours = check_overlap(contours)
+    contours = check_simple_overlap(contours)
 
-    if _writeImg['contour_filtered'] or True:
+    if do_draw:
         drawer.reset()
         for contour in contours:
             drawer.draw([contour])
-        info = 'e_FilteredContour_{}'.format(edge_type)
-        drawer.save(info)
+        desc = 'e_FilteredContour_{}'.format(edge_type)
+        drawer.save(desc)
 
     
-    # Feature extraction and cluster
-    print('Extract contour feature')
+    print('Feature extraction and cluster')
+    # cnt_feature_dic_list = [
+    #     {'cnt': contours[i], 
+    #      'shape': cnt_sample_distance_list[i], 
+    #      'color': cnt_intensity_list[i],
+    #      'size': cnt_normsize_list[i],
+    #      'color_gradient': cnt_color_gradient_list[i]} for i in range(len(contours))]
+    # feature_dic = {'shape': cnt_sample_distance_list,
+    #                'color': cnt_intensity_list,
+    #                'size': cnt_normsize_list}
     cnt_feature_dic_list, feature_dic = get_contour_feature.extract_feature(image_resi, contours)
     cnt_features = [cnt_dic['cnt'] for cnt_dic in cnt_feature_dic_list]
 
@@ -64,12 +72,12 @@ def check_and_cluster(image_resi, contours, drawer, edge_type, _writeImg):
         contour_feature_list = feature_dic[feature_type]
 
         # hierarchical clustering, output the classified consequence
-        label_list = Hierarchical_clustering(contour_feature_list, drawer.img_name, feature_type, edge_type, draw=_writeImg['cluster_histogram'])
+        label_list = Hierarchical_clustering(contour_feature_list, drawer.img_name, feature_type, edge_type, do_draw=do_draw)
 
         unique_label, label_counts = np.unique(label_list, return_counts=True) 
         # array([1, 2]), array([ 66, 101])
 
-        if _writeImg[feature_type] or True:
+        if do_draw:
             drawer.reset()
             for label in unique_label:
                 tmp_splited_group = []
@@ -79,8 +87,8 @@ def check_and_cluster(image_resi, contours, drawer, edge_type, _writeImg):
                 
                 drawer.draw(np.array(tmp_splited_group))
 
-            info = 'f_Feature{}_{}'.format(feature_type.capitalize(), edge_type)
-            drawer.save(info)
+            desc = 'f_Feature{}_{}'.format(feature_type.capitalize(), edge_type)
+            drawer.save(desc)
         
         # save the 3 types of the classified output
         label_list_dic[feature_type] = label_list
@@ -111,8 +119,8 @@ def check_and_cluster(image_resi, contours, drawer, edge_type, _writeImg):
         drawer.draw(np.array(tmp_cnt_group))
         final_group.append({'cnt': cnt_features, 'obvious_weight': 0, 'group_dic': tmp_group})
 
-    if _writeImg['original_result'] or True:
-        info = 'g_OriginalResult_{}'.format(edge_type)
-        drawer.save(info)
+    if do_draw:
+        desc = 'g_OriginalResult_{}'.format(edge_type)
+        drawer.save(desc)
 
     return final_group

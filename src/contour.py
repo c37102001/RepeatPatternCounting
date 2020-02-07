@@ -1,5 +1,5 @@
 import cv2
-from utils import switchColor, is_overlap
+from utils import is_overlap
 
 
 def find_contour(edged):
@@ -42,7 +42,7 @@ def check_property(contours, re_height, re_width):
     return contours
 
 
-def check_overlap(contours):
+def check_simple_overlap(contours):
     tmp_cnt_list = [contours[0]]
     # the first contour
     tmp_cnt = contours[0]

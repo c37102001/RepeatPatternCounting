@@ -3,7 +3,7 @@ from scipy.cluster.hierarchy import linkage, fcluster
 import matplotlib.pyplot as plt
 
 
-def Hierarchical_clustering(feature_list, img_name, para, edge_type, cut_method='elbow', draw=False):
+def Hierarchical_clustering(feature_list, img_name, para, edge_type, cut_method='elbow', do_draw=False):
     '''Cluster the contours.
 
     ref1 : https://joernhees.de/blog/2015/08/26/scipy-hierarchical-clustering-and-dendrogram-tutorial/
@@ -83,7 +83,8 @@ def Hierarchical_clustering(feature_list, img_name, para, edge_type, cut_method=
     plt.title(para + ' cut_point : ' + str(cut_point_list[0][0] + 1) + '  | value: ' + str(
         acceleration[cut_point_list[0][0]]) + ' | ratio: ' + str(max_ratio))
 
-    if draw:
+    # TODO fix do_draw
+    if do_draw and False:
         plt.savefig(output_path + img_name + '_f_para[' + para + ']_his[' + str(edge_type) + '].png')
     plt.close()
 

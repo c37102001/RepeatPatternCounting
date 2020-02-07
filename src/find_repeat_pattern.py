@@ -9,7 +9,8 @@ import argparse
 import matplotlib.pyplot as plt
 
 from canny import canny_edge_detect
-from contour import find_contour, check_property, check_overlap
+from contour import find_contour, check_property, check_simple_overlap
+from utils import check_overlap
 from misc import check_and_cluster, ContourDrawer
 from ipdb import set_trace as pdb
 
@@ -53,20 +54,44 @@ output_path = '../output/'
 csv_output = '../output_csv_6_8[combine_result_before_filter_obvious]/'
 evaluate_csv_path = '../evaluate_data/groundtruth_csv/generalize_csv/'
 
-_writeImg = {'original_image': False, 'original_edge': False, 'enhanced_edge': False, 'original_contour': False,
-             'contour_filtered': False, 'size': True, 'shape': True, 'color': True, 'cluster_histogram': False,
-             'original_result': False, 'each_obvious_result': False, 'combine_obvious_result': False,
-             'obvious_histogram': False, 'each_group_result': False, 'result_obvious': False,
-             'final_each_group_result': False, 'final_result': True}
+DRAW_PROCESS = True
 
 _show_resize = [(720, 'height'), (1200, 'width')][0]
 
+
+def get_edge_group(image_resi, edged, edge_type, do_enhance=False, do_draw=False):
+    if do_draw:
+        img_path = '{}{}_b_OriginEdge{}.jpg'.format(output_path, img_name, edge_type)
+        cv2.imwrite(img_path, edged)
+
+    if do_enhance:  
+        # enhance and close the edge
+        print('Enhance edge')
+        # local equalization, refer to : http://docs.opencv.org/3.1.0/d5/daf/tutorial_py_histogram_equalization.html
+        if _gray_value_redistribution_local:
+            # create a CLAHE object (Arguments are optional), ref: https://www.jianshu.com/p/19ff65ac3844
+            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+            edged = clahe.apply(edged)
+        else:
+            edged = cv2.equalizeHist(edged) # golbal equalization
+
+        if do_draw:
+            cv2.imwrite(output_path + img_name + '_c_enhanced_edge[' + str(edge_type) + '].jpg', edged)
+
+    contours = find_contour(edged)
+    final_group = check_and_cluster(image_resi, contours, drawer, edge_type, DRAW_PROCESS)
+
+    return final_group
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--test', action='store_true')
     parser.add_argument('--test_img', type=str, default='IMG_ (33).jpg')
     args = parser.parse_args()
+
+    # TODO =========
+    args.test = True
+    # ===============
 
     max_time_img = ''
     min_time_img = ''
@@ -75,13 +100,17 @@ def main():
 
     evaluation_csv = [['Image name', 'TP', 'FP', 'FN', 'Precision', 'Recall', 'F_measure', 'Error_rate']]
 
-    for i, img_name in enumerate(os.listdir(input_path)):
+    for i, name in enumerate(os.listdir(input_path)):
 
         if args.test:
-            img_name = args.test_img
+            name = args.test_img
+        
+        global img_name, drawer
+        img_name = name
+        drawer = ContourDrawer(output_path, img_name)
 
-        color_image_ori = cv2.imread(input_path + img_name)  # (1365, 2048, 3)
         print('[Input] %s' % img_name)
+        color_image_ori = cv2.imread(input_path + img_name)  # (1365, 2048, 3)
         img_name = '.'.join(img_name.split('.')[:-1])
 
         start_time = time.time()
@@ -97,64 +126,26 @@ def main():
         # resize_height=736, image_resi.shape=(736,1104,3)
         image_resi = cv2.resize(color_image_ori, (0, 0), fx=resize_height / height, fy=resize_height / height)
 
-        if _writeImg['original_image']:
+        if DRAW_PROCESS:
             cv2.imwrite(output_path + img_name + '_a_original_image.jpg', image_resi)
 
         # combine two edge detection result
         final_differ_edge_group = []
 
         # check if two edge detection method is both complete
+        canny_edge = canny_edge_detect(image_resi)
+        canny_group = get_edge_group(image_resi, canny_edge, edge_type='Canny', do_draw=DRAW_PROCESS)
+        for edge_group in canny_group:
+            final_differ_edge_group.append(edge_group)
 
-        for j in range(2):
-
-            if _use_structure_edge:
-                edge_type = 'structure'
-                # read edge image from matlab
-                edge_image_ori = cv2.imread(edge_img, cv2.IMREAD_GRAYSCALE)
-                height, width = edge_image_ori.shape[:2]
-                edged = cv2.resize(edge_image_ori, (0, 0), fx=resize_height / height, fy=resize_height / height)
-
-            else:
-                edge_type = 'canny'
-                edged = canny_edge_detect(image_resi)
-
-            if _writeImg['original_edge']:
-                cv2.imwrite(output_path + img_name + '_b_original_edge[' + str(edge_type) + '].jpg', edged)
-
-            if _enhance_edge and _use_structure_edge:
-                # enhance and close the edge
-                print('Enhance edge')
-                # local equalization
-                # refer to : http://docs.opencv.org/3.1.0/d5/daf/tutorial_py_histogram_equalization.html
-                if _gray_value_redistribution_local:
-
-                    # create a CLAHE object (Arguments are optional).
-                    # ref: https://www.jianshu.com/p/19ff65ac3844
-                    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-                    edged = clahe.apply(edged)
-
-                else:
-                    # golbal equalization
-                    edged = cv2.equalizeHist(edged)
-
-                if _writeImg['enhanced_edge']:
-                    cv2.imwrite(output_path + img_name + '_c_enhanced_edge[' + str(edge_type) + '].jpg', edged)
-                    # end enhance edge if
-
-            if _use_structure_edge:
-                _use_structure_edge = False
-            else:
-                _use_structure_edge = True
-
-            contours = find_contour(edged)
-
-            drawer = ContourDrawer(output_path, img_name)
-            final_group = check_and_cluster(image_resi, contours, drawer, edge_type, _writeImg)
-
-            for f_edge_group in final_group:
-                final_differ_edge_group.append(f_edge_group)
+        if _use_structure_edge:
+            structure_edge = cv2.imread(edge_img, cv2.IMREAD_GRAYSCALE)
+            structure_edge = cv2.resize(structure_edge, (0, 0), fx=resize_height / height, fy=resize_height / height)
+            structure_group = get_edge_group(image_resi, structure_edge, edge_type='Structure', do_enhance=True, do_draw=DRAW_PROCESS)
+            for edge_group in structure_group:
+                final_differ_edge_group.append(edge_group)
         
-        # ================== Edited to here =======================
+        # =================== edit to here =======================
 
         # check two edge contour overlap
         compare_overlap_queue = []
@@ -170,7 +161,7 @@ def main():
         _label = [x['label'] for x in compare_overlap_queue]
         print('label_dic:', [(y, _label.count(y)) for y in set(_label)])
 
-        compare_overlap_queue = CheckOverlap(compare_overlap_queue, keep='group_weight')
+        compare_overlap_queue = check_overlap(compare_overlap_queue, keep='group_weight')
 
         color_index = 0
         contour_image = np.zeros(image_resi.shape, np.uint8)
@@ -219,7 +210,7 @@ def main():
 
         # end find final group for
 
-        if _writeImg['original_result']:
+        if DRAW_PROCESS:
             cv2.imwrite(output_path + img_name + '_g_remove_overlap_combine_cnt.jpg', contour_image)
 
             # end _combine_two_edge_result_before_filter_obvious if
@@ -276,17 +267,15 @@ def main():
                     final_group[i]['obvious_weight'] += 1
                 cv2.drawContours(contour_image, np.array(final_group[i]['cnt']), -1, COLOR, 2)
 
-            if _writeImg['each_obvious_result']:
-                cv2.imwrite(output_path + img_name + '_h_para[' + obvious_para + ']_obvious(Green)[' + str(
-                    edge_type) + '].jpg', contour_image)
+            if DRAW_PROCESS:
+                cv2.imwrite(output_path + img_name + '_h_para[' + obvious_para + ']_obvious(Green).jpg', contour_image)
 
             plt.bar(x=range(len(area_list)), height=area_list)
             plt.title(obvious_para + ' cut_point : ' + str(obvious_index) + '  | value: ' + str(
-                final_group[obvious_index][obvious_para]) + '  |[' + str(edge_type) + ']')
+                final_group[obvious_index][obvious_para]))
 
-            if _writeImg['obvious_histogram']:
-                plt.savefig(output_path + img_name + '_h_para[' + obvious_para + ']_obvious_his[' + str(
-                    edge_type) + '].png')
+            if DRAW_PROCESS:
+                plt.savefig(output_path + img_name + '_h_para[' + obvious_para + ']_obvious_his.png')
             plt.close()
 
             if obvious_para == 'color_gradient':
@@ -374,7 +363,7 @@ def main():
             cv2.drawContours(contour_image, np.array(tmp_group['cnt']), -1, COLOR, 2)
             cv2.drawContours(contour_image_each, np.array(tmp_group['cnt']), -1, COLOR, 2)
 
-            if _writeImg['final_each_group_result']:
+            if DRAW_PROCESS:
                 cv2.imwrite(output_path + img_name + '_k_label[' + str(color_index) + ']_Count[' + str(
                     tmp_group['count']) + ']_size[' + str(tmp_group['size']) + ']_color' + str(
                     tmp_group['color']) + '_edgeNumber[' + str(tmp_group['edge_number']) + '].jpg', contour_image_each)
@@ -390,8 +379,7 @@ def main():
         contour_image = cv2.resize(contour_image, (0, 0), fx=height / resize_height, fy=height / resize_height)
         combine_image = np.concatenate((color_image_ori, contour_image), axis=1)
 
-        if _writeImg['final_result']:
-            cv2.imwrite(output_path + img_name + '_l_final_result.jpg', combine_image)
+        cv2.imwrite(output_path + img_name + '_l_final_result.jpg', combine_image)
 
         print('Finished in ', time.time() - start_time, ' s')
 
@@ -554,94 +542,6 @@ def Avg_Img_Gredient(img, model='lab'):
     return avg_gradient
 
 
-def CheckOverlap(cnt_dic_list, keep='keep_inner'):
-    '''
-    @param
-    keep = 'keep_inner'(default) :
-    Since OpenCV FindContours() will find two contours(inner and outer) of a single closed
-    edge component, we choose the inner one to preserve. (The reason is that the outter one
-    is easily connected with the surroundings.)
-
-    keep = 'group_weight' :
-    Since there's two edge results(Canny and SF), we should decide which contours
-    to preserved if they are overlapped.
-    check if overlap contours are same contour , if true makes them same label
-    '''
-
-    if cnt_dic_list == []:
-        return []
-
-    checked_list = []
-
-    if keep == 'group_weight':
-
-        label_list = [x['label'] for x in cnt_dic_list]
-        label_change_list = []
-        ''''''
-        label_group_change = []
-        label_change_dic = {}
-
-        '''
-        Compare each 2 contours and check if they are overlapped.
-        If they are overlapped, change the label of the less group count one to the other's label whose group count is more.
-        '''
-        for cnt_i in range(len(cnt_dic_list) - 1):
-            for cnt_k in range(cnt_i + 1, len(cnt_dic_list)):
-
-                if cnt_dic_list[cnt_i]['group_weight'] > 0 and cnt_dic_list[cnt_k]['group_weight'] > 0:
-                    if IsOverlap(cnt_dic_list[cnt_i]['cnt'], cnt_dic_list[cnt_k]['cnt']):
-
-                        if cnt_dic_list[cnt_i]['group_weight'] > cnt_dic_list[cnt_k]['group_weight']:
-                            cnt_dic_list[cnt_k]['group_weight'] = 0
-                            label_change_list.append((cnt_dic_list[cnt_k]['label'], cnt_dic_list[cnt_i]['label']))
-                        else:
-                            cnt_dic_list[cnt_i]['group_weight'] = 0
-                            label_change_list.append((cnt_dic_list[cnt_i]['label'], cnt_dic_list[cnt_k]['label']))
-
-        # check if overlap contours are same contour , if true makes them same label
-        for label_change in set(label_change_list):
-            '''0.5 Changeable'''
-            if label_change_list.count(label_change) >= 0.5 * label_list.count(label_change[0]):
-                found = False
-                for label_group_i in range(len(label_group_change)):
-                    if label_change[0] in label_group_change[label_group_i]:
-                        found = True
-                        label_group_change[label_group_i].append(label_change[1])
-                    elif label_change[1] in label_group_change[label_group_i]:
-                        found = True
-                        label_group_change[label_group_i].append(label_change[0])
-
-                if not found:
-                    label_group_change.append([label_change[0], label_change[1]])
-
-                # label_change_dic[label_change[0]] = label_change[1]
-
-        for label_group in label_group_change:
-            for label in label_group:
-                label_change_dic[label] = label_group[0]
-
-        for cnt_dic in cnt_dic_list:
-            if cnt_dic['group_weight'] > 0:
-                if cnt_dic['label'] in label_change_dic:
-                    cnt_dic['label'] = label_change_dic[cnt_dic['label']]
-                checked_list.append(cnt_dic)
-    else:
-
-        if keep == 'keep_inner':
-            # sort list from little to large
-            cnt_dic_list.sort(key=lambda x: len(x['cnt']), reverse=False)
-
-        elif keep == 'keep_outer':
-            cnt_dic_list.sort(key=lambda x: len(x['cnt']), reverse=True)
-
-        for c_dic in cnt_dic_list:
-            if IsOverlapAll(c_dic, checked_list):
-                continue
-            checked_list.append(c_dic)
-
-            # end keep if
-
-    return checked_list
 
 
 
