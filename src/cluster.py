@@ -3,13 +3,7 @@ from scipy.cluster.hierarchy import linkage, fcluster
 import matplotlib.pyplot as plt
 
 
-def Hierarchical_clustering(feature_list, img_name, para, edge_type, cut_method='elbow', do_draw=False):
-    '''Cluster the contours.
-
-    ref1 : https://joernhees.de/blog/2015/08/26/scipy-hierarchical-clustering-and-dendrogram-tutorial/
-    ref2 : http://mirlab.org/jang/books/dcpr/dcHierClustering.asp?title=3-2%20Hierarchical%20Clustering%20(%B6%A5%BCh%A6%A1%A4%C0%B8s%AAk)&language=chinese
-    '''
-
+def hierarchical_clustering(feature_list, img_name, para, edge_type, cut_method='elbow', do_draw=False):
     # hierarchically link cnt by order of distance from distance method 'ward'
     # Output a hierarchical tree as ppt. page 22.
     cnt_hierarchy = linkage(feature_list, 'ward')
