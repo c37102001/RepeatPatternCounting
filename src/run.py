@@ -31,7 +31,9 @@ resize_height = 736.0
 # sliding window's split number
 
 # Tells that which method is used first
+_use_canny_edge = False
 _use_structure_edge = True
+_use_hed_edge = True
 # Only used in SF
 _enhance_edge = True
 # Decide whether local/global equalization to use (True-->Local)
@@ -40,18 +42,19 @@ _gray_value_redistribution_local = True
 _evaluate = False
 
 input_path = '../input/image/'
-# edge_path = '../input/edge_image/'  # structure forest output
+strct_edge_path = '../input/edge_image/'  # structure forest output
+hed_edge_path = '../input/hed_edge_image/'  # hed edge
 # output_path = '../output/'
-edge_path = '../input/hed_edge_image/'  # hed edge
-output_path = '../output_hed/'
+# output_path = '../output_hed/'
+output_path = '../output_hed_strct/'
 
 csv_output = '../output_csv_6_8[combine_result_before_filter_obvious]/'
 evaluate_csv_path = '../evaluate_data/groundtruth_csv/generalize_csv/'
 
 DRAW_PROCESS = False
-IMG_LIST = ['IMG_ (19).jpg', 'IMG_ (28).jpg', 'IMG_ (29).jpg', ]
+IMG_LIST = ['IMG_ (7).jpg', 'IMG_ (6).jpg', 'IMG_ (99).jpg', ]
 TEST = False
-TEST_IMG = 'IMG_ (1).jpg'
+TEST_IMG = 'IMG_ (10).jpg'
 EXCEPTION_LIST = ['IMG_ (3).jpg', 'IMG_ (9).jpg']
 
 def get_edge_group(drawer, edged, edge_type, do_enhance=False, do_draw=False):
@@ -105,31 +108,27 @@ for i, img_name in enumerate(tqdm(IMG_LIST)):
     if DRAW_PROCESS:
         cv2.imwrite(output_path + img_name + '_a_original_image.jpg', image_resi)
 
-    # decide whcih method (canny/structure forest)
-    _use_structure_edge = True
+    final_differ_edge_group = []    # combine edge detection result
+    if _use_canny_edge:
+        canny_edge = canny_edge_detect(image_resi)
+        canny_group = get_edge_group(drawer, canny_edge, edge_type='Canny', do_draw=DRAW_PROCESS)
+        for edge_group in canny_group:
+            final_differ_edge_group.append(edge_group)
+    
+    edge_imgs = []
     if _use_structure_edge:
-        # edge_img = edge_path + img_name + '_edge.jpg'
-        edge_img = edge_path + img_name + '_hed.png'
-        # assert os.path.isfile(edge_img), 'EDGE FILE does not exist!'
+        edge_imgs.append(strct_edge_path + img_name + '_edge.jpg')
+    if _use_hed_edge:
+        edge_imgs.append(hed_edge_path + img_name + '_hed.png')
+    for edge_img in edge_imgs:
         if not os.path.isfile(edge_img):
             print('EDGE FILE does not exist!')
             continue
-
-    # combine two edge detection result
-    final_differ_edge_group = []
-
-    # check if two edge detection method is both complete
-    canny_edge = canny_edge_detect(image_resi)
-    canny_group = get_edge_group(drawer, canny_edge, edge_type='Canny', do_draw=DRAW_PROCESS)
-    for edge_group in canny_group:
-        final_differ_edge_group.append(edge_group)
-
-    if _use_structure_edge:
-        structure_edge = cv2.imread(edge_img, cv2.IMREAD_GRAYSCALE)
-        structure_edge = cv2.resize(structure_edge, (0, 0), fx=resize_height / height, fy=resize_height / height)
-        structure_group = get_edge_group(drawer, structure_edge, edge_type='Structure', do_enhance=True, do_draw=DRAW_PROCESS)
-        for edge_group in structure_group:
-            final_differ_edge_group.append(edge_group)
+        edge = cv2.imread(edge_img, cv2.IMREAD_GRAYSCALE)
+        edge = cv2.resize(edge, (0, 0), fx=resize_height / height, fy=resize_height / height)
+        edge_group = get_edge_group(drawer, edge, edge_type='Structure', do_enhance=True, do_draw=DRAW_PROCESS)
+        for g in edge_group:
+            final_differ_edge_group.append(g)
 
     # check two edge contour overlap
     compare_overlap_queue = []

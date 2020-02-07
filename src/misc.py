@@ -74,7 +74,7 @@ def check_and_cluster(contours, drawer, edge_type, do_draw=False):
     label_list_dic = {}
     # Respectively use shape, color, and size as feature set to cluster
     for feature_type in ['size', 'shape', 'color']:
-        print('feature_type:', feature_type)
+        print('[{}] feature_type:{}'.format(edge_type, feature_type))
 
         contour_feature_list = feature_dic[feature_type]
 
