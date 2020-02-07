@@ -1,2 +1,4 @@
 *.pyc
 output/*
+output_hed/*
+input/*

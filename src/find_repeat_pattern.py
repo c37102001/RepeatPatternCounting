@@ -11,6 +11,7 @@ from canny import canny_edge_detect
 from utils import check_overlap, avg_img_gradient, evaluate_detection_performance
 from misc import check_and_cluster, ContourDrawer
 from ipdb import set_trace as pdb
+from tqdm import tqdm
 
 GREEN = (0, 255, 0)
 BLUE = (255, 0, 0)
@@ -39,14 +40,19 @@ _gray_value_redistribution_local = True
 _evaluate = False
 
 input_path = '../input/image/'
-edge_path = '../input/edge_image/'  # structure forest output
-output_path = '../output/'
+# edge_path = '../input/edge_image/'  # structure forest output
+# output_path = '../output/'
+edge_path = '../input/hed_edge_image/'  # hed edge
+output_path = '../output_hed/'
+
 csv_output = '../output_csv_6_8[combine_result_before_filter_obvious]/'
 evaluate_csv_path = '../evaluate_data/groundtruth_csv/generalize_csv/'
 
-DRAW_PROCESS = True
-TEST = True
-TEST_IMG = 'IMG_ (33).jpg'
+DRAW_PROCESS = False
+IMG_LIST = ['IMG_ (19).jpg', 'IMG_ (28).jpg', 'IMG_ (29).jpg', ]
+TEST = False
+TEST_IMG = 'IMG_ (1).jpg'
+EXCEPTION_LIST = ['IMG_ (3).jpg', 'IMG_ (9).jpg']
 
 def get_edge_group(drawer, edged, edge_type, do_enhance=False, do_draw=False):
     if do_draw:
@@ -82,7 +88,8 @@ max_time = 0.0
 evaluation_csv = [['Image name', 'TP', 'FP', 'FN', 'Precision', 'Recall', 'F_measure', 'Error_rate']]
 
 
-for i, img_name in enumerate(os.listdir(input_path)):
+# for i, img_name in enumerate(tqdm(os.listdir(input_path))):
+for i, img_name in enumerate(tqdm(IMG_LIST)):
     start_time = time.time()
 
     if TEST:
@@ -101,8 +108,12 @@ for i, img_name in enumerate(os.listdir(input_path)):
     # decide whcih method (canny/structure forest)
     _use_structure_edge = True
     if _use_structure_edge:
-        edge_img = edge_path + img_name + '_edge.jpg'
-        assert os.path.isfile(edge_img), 'EDGE FILE does not exist!'
+        # edge_img = edge_path + img_name + '_edge.jpg'
+        edge_img = edge_path + img_name + '_hed.png'
+        # assert os.path.isfile(edge_img), 'EDGE FILE does not exist!'
+        if not os.path.isfile(edge_img):
+            print('EDGE FILE does not exist!')
+            continue
 
     # combine two edge detection result
     final_differ_edge_group = []

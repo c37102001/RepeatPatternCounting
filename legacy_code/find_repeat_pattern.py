@@ -67,11 +67,11 @@ _showImg = {'original_image': False, 'original_edge': False, 'enhanced_edge': Fa
             'original_result': False, 'each_obvious_result': False, 'combine_obvious_result': False,
             'obvious_histogram': False, 'each_group_result': False, 'result_obvious': False,
             'final_each_group_result': False, 'final_result': False}
-_writeImg = {'original_image': True, 'original_edge': True, 'enhanced_edge': True, 'original_contour': True,
-             'contour_filtered': True, 'size': True, 'shape': True, 'color': True, 'cluster_histogram': True,
-             'original_result': True, 'each_obvious_result': True, 'combine_obvious_result': True,
-             'obvious_histogram': True, 'each_group_result': True, 'result_obvious': True,
-             'final_each_group_result': True, 'final_result': True}
+_writeImg = {'original_image': False, 'original_edge': False, 'enhanced_edge': False, 'original_contour': False,
+             'contour_filtered': False, 'size': False, 'shape': False, 'color': False, 'cluster_histogram': False,
+             'original_result': False, 'each_obvious_result': False, 'combine_obvious_result': False,
+             'obvious_histogram': False, 'each_group_result': False, 'result_obvious': False,
+             'final_each_group_result': False, 'final_result': True}
 
 _show_resize = [(720, 'height'), (1200, 'width')][0]
 
