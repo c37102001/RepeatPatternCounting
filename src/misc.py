@@ -1,40 +1,8 @@
 import numpy as np
-import cv2
 from utils import check_simple_overlap, check_contour_property
 from cluster import hierarchical_clustering
 import get_contour_feature
 from ipdb import set_trace as pdb
-
-
-class ContourDrawer:
-    def __init__(self, image, output_path, img_name):
-        self.image = image
-        self.output_path = output_path
-        self.img_name = img_name
-        self.color_index = 0
-        self.switchColor = \
-            [(255, 255, 0), (255, 0, 255), (0, 255, 255), (255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 128, 0),
-             (255, 0, 128), (128, 0, 255), (128, 255, 0), (0, 128, 255), (0, 255, 128), (128, 128, 0), (128, 0, 128),
-             (0, 128, 128), (255, 64, 0), (255, 0, 64), (64, 255, 0), (64, 0, 255), (0, 255, 64), (0, 64, 255)]
-    
-    def reset(self):
-        self.color_index = 0
-        self.contour_image = np.zeros(self.image.shape, np.uint8)
-    
-    def draw(self, contour, contour_image=None):
-        color = self.switchColor[self.color_index % len(self.switchColor)]
-        
-        if contour_image is not None:
-            cv2.drawContours(contour_image, contour, -1, color, 2)
-            self.color_index += 1
-            return contour_image    
-        else:
-            cv2.drawContours(self.contour_image, contour, -1, color, 2)
-            self.color_index += 1
-
-    def save(self, desc):
-        img_path = '{}{}_{}.jpg'.format(self.output_path, self.img_name, desc)
-        cv2.imwrite(img_path, self.contour_image)
 
 
 def check_and_cluster(contours, drawer, edge_type, do_draw=False):
@@ -46,8 +14,8 @@ def check_and_cluster(contours, drawer, edge_type, do_draw=False):
         desc = 'd_OriginContour_{}'.format(edge_type)
         drawer.save(desc)
 
-    re_height, re_width = drawer.image.shape[:2]
-    contours = check_contour_property(contours, re_height, re_width)
+    height, width = drawer.image.shape[:2]
+    contours = check_contour_property(contours, height, width)
     contours = check_simple_overlap(contours)
 
     if do_draw:
