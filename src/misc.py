@@ -1,30 +1,25 @@
 import numpy as np
-from utils import check_simple_overlap, check_contour_property
+from utils import filter_contours, remove_overlap
 from cluster import hierarchical_clustering
 import get_contour_feature
 from ipdb import set_trace as pdb
 
 
 def check_and_cluster(contours, drawer, edge_type, do_draw=False):
-
-    if do_draw:
-        drawer.reset()
-        for contour in contours:
-            drawer.draw([contour])
-        desc = 'd_OriginContour_{}'.format(edge_type)
-        drawer.save(desc)
+    '''
+    Args:
+        contours: (list of ndarray), len = Num_of_cnts, ele = (Num_of_pixels, 1, 2(x,y)) sorted by pix_len
+    '''
 
     height, width = drawer.image.shape[:2]
-    contours = check_contour_property(contours, height, width)
-    contours = check_simple_overlap(contours)
 
-    if do_draw:
-        drawer.reset()
-        for contour in contours:
-            drawer.draw([contour])
-        desc = 'e_FilteredContour_{}'.format(edge_type)
-        drawer.save(desc)
+    # filter by area, perimeter, solidity, edge_num
+    contours = filter_contours(contours, height, width)
 
+    # remove outer overlap contour
+    contours = remove_overlap(contours)
+
+    # ============= edit to here ===================
     
     print('Feature extraction and cluster')
     # cnt_feature_dic_list = [

@@ -44,7 +44,7 @@ evaluate_csv_path = '../evaluate_data/groundtruth_csv/generalize_csv/'
 DRAW_PROCESS = False
 IMG_LIST = ['IMG_ (39).jpg', 'IMG_ (10).jpg', 'IMG_ (16).jpg' ]
 TEST = True
-TEST_IMG = 'IMG_ (39).jpg'
+TEST_IMG = 'IMG_ (33).jpg'
 EXCEPTION_LIST = ['IMG_ (3).jpg', 'IMG_ (9).jpg']
 
 
@@ -77,7 +77,6 @@ def get_edge_group(drawer, edge_img, edge_type, do_enhance=False, do_draw=False)
         img_path = '{}{}_b_OriginEdge{}.jpg'.format(output_dir, img_name, edge_type)
         cv2.imwrite(img_path, edge_img)
 
-    # pdb()
     if do_enhance:  
         # Enhance edge
         if _gray_value_redistribution_local:
@@ -92,10 +91,20 @@ def get_edge_group(drawer, edge_img, edge_type, do_enhance=False, do_draw=False)
     '''find contours'''
     # threshold to 0 or 255
     edge_img = cv2.threshold(edge_img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
+
     # find closed contours, return (list of ndarray), len = Num_of_cnts, ele = (Num_of_pixels, 1, 2(x,y))
     contours = cv2.findContours(edge_img, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)[-2]
+
     # sort by num_of_pixels in contour, from min to max
     contours.sort(key=lambda x: len(x), reverse=False)
+
+    if do_draw:
+        drawer.reset()
+        for contour in contours:
+            drawer.draw([contour])
+        desc = 'd_OriginContour_{}'.format(edge_type)
+        drawer.save(desc)
+
     # feature filter, extract and cluster
     grouped_cnt = check_and_cluster(contours, drawer, edge_type, DRAW_PROCESS)
 

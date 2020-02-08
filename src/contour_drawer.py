@@ -30,4 +30,4 @@ class ContourDrawer:
 
     def save(self, desc):
         img_path = '{}{}_{}.jpg'.format(self.output_path, self.img_name, desc)
-        cv2.imwrite(img_path, self.contour_image)
+        cv2.imwrite(img_path, self.canvas)

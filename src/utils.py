@@ -1,50 +1,70 @@
 import numpy as np
 import cv2
 import math
+from ipdb import set_trace as pdb
+from tqdm import tqdm
+import itertools
 
 
-def check_contour_property(contours, re_height, re_width):
-    del_idx_list = []
-    for i, c in enumerate(contours):
-        area = cv2.contourArea(c)
-        convex_area = cv2.contourArea(cv2.convexHull(c))
-        approx = cv2.approxPolyDP(c, 10, True)
-
-        ''' new
-        bad_solidity = convex_area == 0 or area / convex_area < 0.3
-        small_area = area < 10 or len(c) < 60
-        # big_area = len(c) > (re_height + re_width) * 2 / 3.0
-        # too_many_edge = len(approx) > 50
+def filter_contours(contours, re_height, re_width):
+    MIN_PERIMETER = 60
+    MAX_IMG_SIZE = 5
+    MIN_IMG_SIZE = 30000
+    SOLIDITY_THRE = 0.5
+    MAX_EDGE_NUM = 50
+    
+    accept_contours = []
+    for c in contours:
+        perimeter = len(c)
+        if perimeter < MIN_PERIMETER or perimeter > (re_height + re_width) * 2 / 3.0:
+            continue
         
-        if bad_solidity or small_area:
-            del_idx_list.append(i)
-        '''
+        contour_area = cv2.contourArea(c)
+        if contour_area < (re_height * re_width) / MIN_IMG_SIZE or contour_area > (re_height * re_width) / MAX_IMG_SIZE:
+            continue
 
-        small_and_big = len(c) < 60 or len(c) > (re_height + re_width) * 2 / 3.0
-        high_density = area < 4 or area / convex_area < 0.5
-        too_many_edge = len(approx) > 50
+        convex_area = cv2.contourArea(cv2.convexHull(c))
+        solidity = contour_area / convex_area
+        if solidity < SOLIDITY_THRE:
+            continue
 
-        if small_and_big or high_density or too_many_edge:
-            del_idx_list.append(i)
+        epsilon = 0.01 * cv2.arcLength(c, closed=True)
+        edge_num = len(cv2.approxPolyDP(c, epsilon, closed=True))
+        if edge_num > MAX_EDGE_NUM:
+            continue
 
-    while len(del_idx_list) > 0:
-        del_idx = del_idx_list.pop()
-        del contours[del_idx]
+        accept_contours.append(c)
+
+    return accept_contours
+
+def remove_overlap(contours):
+    overlap_outer_cnt = []
+    contours.sort(key=lambda x: len(x), reverse=False)
+    for i, cnt1 in enumerate(contours[:-1]):
+        for cnt2 in contours[i+1: ]:
+            if is_overlap(cnt1, cnt2):
+                overlap_outer_cnt.append(cnt2)
+    for cnt in overlap_outer_cnt:
+        contours.remove(cnt)
     return contours
 
-def check_simple_overlap(contours):
-    tmp_cnt_list = [contours[0]]
-    # the first contour
-    tmp_cnt = contours[0]
-    # Since if is overlap , the order of the overlapped contours will be continuous
-    # The goal of the following for-loop is equal to CheckOverlap(.., 'keep inner') and much more easier.
-    for c in contours[1:]:
-        if not is_overlap(tmp_cnt, c):
-            tmp_cnt_list.append(c)
-        tmp_cnt = c
 
-    contours = tmp_cnt_list
-    return contours
+def is_overlap(cnt1, cnt2):
+    """
+    Determine that if one contour contains another one.
+    """
+
+    c1M = get_centroid(cnt1)
+    c2M = get_centroid(cnt2)
+    c1D = abs(cv2.pointPolygonTest(cnt1, c1M, True))
+    c2D = abs(cv2.pointPolygonTest(cnt2, c2M, True))
+    c1c2D = eucl_distance(c1M, c2M)
+
+    # check contains and similar size
+    if c1c2D < min(c1D, c2D) and min(c1D, c2D) / max(c1D, c2D) > (2 / 3):
+        return True
+    
+    return False
 
 def check_overlap(cnt_dic_list, keep='keep_inner'):
     '''
@@ -152,27 +172,6 @@ def is_overlap_all(cnt_dic, cnt_dic_list):
 
     return False
 
-def is_overlap(cnt1, cnt2):
-    """
-    Determine that if one contour contains another one.
-    """
-
-    if cnt1 == [] or cnt2 == []:
-        return False
-
-    c1M = get_centroid(cnt1)
-    c2M = get_centroid(cnt2)
-    c1_min_d = min_distance(cnt1)
-    c2_min_d = min_distance(cnt2)
-    moment_d = eucl_distance(c1M, c2M)
-
-    if min(c1_min_d, c2_min_d) == 0:
-        return False
-
-    # TODO why or? why ratio = 3?
-    return (moment_d < c1_min_d or moment_d < c2_min_d) and max(c1_min_d, c2_min_d) / min(c1_min_d, c2_min_d) <= 3
-    # return (moment_d < c1_min_d and moment_d < c2_min_d) and min(c1_min_d, c2_min_d) / max(c1_min_d, c2_min_d) > 0.6
-
 def avg_img_gradient(img, model='lab'):
     '''
     Count the average gardient of the whole image, in order to compare with
@@ -213,34 +212,10 @@ def avg_img_gradient(img, model='lab'):
     return avg_gradient
 
 def get_centroid(cnt):
-    """
-    Calculate the average coordinate as centroid.
-    """
-    if len(cnt) == 1:
-        return cnt
-    elif len(cnt) == 2:
-        return (cnt[0] + cnt[1]) / 2
-
     M = cv2.moments(cnt)
     cx = int(M['m10'] / M['m00'])
     cy = int(M['m01'] / M['m00'])
     return cx, cy
-
-def min_distance(cnt):
-    '''
-    Calculate the minimum distance between centroid to the contour.
-    '''
-
-    cM = get_centroid(cnt)
-    if len(cnt[0][0]) == 1:
-        cnt = cnt[0]
-    min_d = eucl_distance((cnt[0][0][0], cnt[0][0][1]), cM)
-    for c in cnt:
-        d = eucl_distance((c[0][0], c[0][1]), cM)
-        if d < min_d:
-            min_d = d
-
-    return min_d
 
 def eucl_distance(a, b):
     if type(a) != np.ndarray:
@@ -343,3 +318,39 @@ def Get_Cnt_Area_Coordinate(img, final_group_cnt):
             cnt_area_coordinate.append((np.argwhere(blank_img == 255)).tolist())
 
     return cnt_area_coordinate
+
+
+# def is_overlap_by_charlie(cnt1, cnt2):
+    
+#     # perimeter:
+#     if len(cnt1)/ len(cnt2) < 0.8:
+#         return False
+    
+#     # area
+#     c1A = cv2.contourArea(cnt1)
+#     c2A = cv2.contourArea(cnt2)
+#     if c1A / c2A < 0.75:
+#         return False
+    
+#     # pdb()
+#     c1M = get_centroid(cnt1)
+#     c1D = abs(cv2.pointPolygonTest(cnt1, c1M, True))
+#     c2M = get_centroid(cnt2)
+#     c2D = abs(cv2.pointPolygonTest(cnt2, c2M, True))
+#     c1c2D = eucl_distance(c1M, c2M)
+#     if max(c1D, c2D) == 0:
+#         pdb()
+#     if c1c2D > min(c1D, c2D) or min(c1D, c2D) / max(c1D, c2D) < (2 / 3):
+#         return False
+
+#     # if intersect = not overlap
+#     cnt1 = cnt1.reshape(len(cnt1), 2)
+#     cnt2 = cnt2.reshape(len(cnt2), 2)
+#     sets_cnt1 = set(map(lambda x: frozenset(tuple(x)), cnt1))
+#     sets_cnt2 = set(map(lambda x: frozenset(tuple(x)), cnt2))
+#     if len(sets_cnt1.intersection(sets_cnt2)) > 0:
+#         return False
+
+#     return True
+
+
