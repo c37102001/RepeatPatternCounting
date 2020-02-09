@@ -4,8 +4,8 @@ from ipdb import set_trace as pdb
 
 
 class ContourDrawer:
-    def __init__(self, image, output_path, img_name):
-        self.image = image
+    def __init__(self, color_img, output_path, img_name):
+        self.color_img = color_img
         self.output_path = output_path
         self.img_name = img_name
         self.switchColor = \
@@ -15,7 +15,7 @@ class ContourDrawer:
 
     def reset(self):
         self.color_index = 0
-        self.canvas = np.zeros(self.image.shape, np.uint8)
+        self.canvas = np.zeros(self.color_img.shape, np.uint8)
     
     def draw(self, contour, given_img=None):
         if given_img is not None:   # draw with given contour img

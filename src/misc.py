@@ -12,7 +12,7 @@ def check_and_cluster(contours, drawer, edge_type, do_draw=False):
         contours[0].shape = (Num_of_pixels, 1, 2)
     '''
 
-    height, width = drawer.image.shape[:2]
+    height, width = drawer.color_img.shape[:2]
 
     # filter by area, perimeter, solidity, edge_num
     contours = filter_contours(contours, height, width)
@@ -22,7 +22,6 @@ def check_and_cluster(contours, drawer, edge_type, do_draw=False):
 
     # ============= edit to here ===================
     
-    print('Feature extraction and cluster')
     # cnt_feature_dic_list = [
     #     {'cnt': contours[i], 
     #      'shape': cnt_sample_distance_list[i], 
@@ -32,7 +31,7 @@ def check_and_cluster(contours, drawer, edge_type, do_draw=False):
     # feature_dic = {'shape': cnt_sample_distance_list,
     #                'color': cnt_intensity_list,
     #                'size': cnt_normsize_list}
-    cnt_feature_dic_list, feature_dic = get_contour_feature.extract_feature(drawer.image, contours)
+    cnt_feature_dic_list, feature_dic = get_contour_feature.extract_feature(drawer.color_img, contours, edge_type)
     cnt_features = [cnt_dic['cnt'] for cnt_dic in cnt_feature_dic_list]
 
     label_list_dic = {}
