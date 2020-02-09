@@ -95,9 +95,6 @@ def get_edge_group(drawer, edge_img, edge_type, do_enhance=False, do_draw=False)
     # find closed contours, return (list of ndarray), len = Num_of_cnts, ele = (Num_of_pixels, 1, 2(x,y))
     contours = cv2.findContours(edge_img, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)[-2]
 
-    # sort by num_of_pixels in contour, from min to max
-    contours.sort(key=lambda x: len(x), reverse=False)
-
     if do_draw:
         drawer.reset()
         for contour in contours:
@@ -119,7 +116,7 @@ max_time = 0.0
 evaluation_csv = [['Image name', 'TP', 'FP', 'FN', 'Precision', 'Recall', 'F_measure', 'Error_rate']]
 
 
-# TODO IMG_LIST
+# TODO IMG_LIST, No contour assert
 # for i, img_name in enumerate(tqdm(os.listdir(input_dir))):
 for i, img_path in enumerate(tqdm(IMG_LIST)):
     start_time = time.time()

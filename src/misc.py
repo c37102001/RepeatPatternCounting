@@ -8,7 +8,8 @@ from ipdb import set_trace as pdb
 def check_and_cluster(contours, drawer, edge_type, do_draw=False):
     '''
     Args:
-        contours: (list of ndarray), len = Num_of_cnts, ele = (Num_of_pixels, 1, 2(x,y)) sorted by pix_len
+        contours: (list of ndarray), len = Num_of_cnts
+        contours[0].shape = (Num_of_pixels, 1, 2)
     '''
 
     height, width = drawer.image.shape[:2]

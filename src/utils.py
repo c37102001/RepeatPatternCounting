@@ -38,14 +38,18 @@ def filter_contours(contours, re_height, re_width):
     return accept_contours
 
 def remove_overlap(contours):
-    overlap_outer_cnt = []
+    # sort by num_of_pixels in contour, from min to max
     contours.sort(key=lambda x: len(x), reverse=False)
+    
+    overlap_outer_cnt = []
     for i, cnt1 in enumerate(contours[:-1]):
         for cnt2 in contours[i+1: ]:
             if is_overlap(cnt1, cnt2):
                 overlap_outer_cnt.append(cnt2)
+
     for cnt in overlap_outer_cnt:
         contours.remove(cnt)
+    
     return contours
 
 

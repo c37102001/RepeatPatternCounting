@@ -1,83 +1,57 @@
-'''
-Goal :
-Extract features for clustering from filtered contours.
-The features contains three clustering features (color, size, shape) and one obviousity feature.(color gradient)
-
-'''
-
 import cv2
 import numpy as np
 import math
 import ipdb
 from utils import get_centroid, eucl_distance
-
-GREEN = (0, 255, 0)
-BLUE = (255, 0, 0)
-RED = (0, 0, 255)
-ORANGE = (0, 128, 255)
-YELLOW = (0, 255, 255)
-LIGHT_BLUE = (255, 255, 0)
-PURPLE = (205, 0, 205)
-WHITE = (255, 255, 255)
-BLACK = (0, 0, 0)
+from ipdb import set_trace as pdb
 
 
 def extract_feature(image, contours):
+    '''
+    Args:
+        image: (ndarray) resized colored input img, sized [736, N, 3]
+        contours: (list of ndarray), len = Num_of_cnts
+        contours[0].shape = (Num_of_pixels, 1, 2)
+    '''
     height, width, channel = image.shape
 
-    assert len(contours) > 0, print('No any contour')
-
-    '''
-    record the distance between pixels and the centroid
-    the number of sample distance depend on the dimension of the contour
-    '''
+    # record the distance between pixels and the centroid
+    # the number of sample distance depend on the dimension of the contour
     cnt_sample_distance_list = []
 
-    ''' record the color gradient of the contour '''
+    # record the color gradient of the contour 
     cnt_color_gradient_list = []
-
-    '''
-    several probable dimension of contour shape
-    If pixel s of the contour is between 4-8 , then we take 4 as its dimension.
-    '''
+    
+    # several probable dimension of contour shape
+    # If pixel s of the contour is between 4-8 , then we take 4 as its dimension.
     factor_360 = [4, 8, 20, 40, 90, 180, 360]
 
-    most_cnt_len = len(contours[int(len(contours) * 0.8)])
-    sample_number = 360
-    min_value = 1000
-    for factor in factor_360:
-        differ = abs(most_cnt_len - factor)
-        if differ < min_value:
-            min_value = differ
-            sample_number = factor
+    most_cnt_len = len(contours[int(len(contours) * 0.8)])      # 248
+    sample_number = min(factor_360, key=lambda factor: abs(factor - most_cnt_len))   # 360
 
     for contour in contours:
         feature_list = []
-        max_distance = 0
-        cx, cy = get_centroid(contour)
+        cM = get_centroid(contour)
+
         for pixel in contour:
             pixel = pixel[0]
-            px, py = pixel[0], pixel[1]
-            # the (0,0) in image is the left top point
-            v1 = (py - cy, cx - px)
-            v2 = (0, height)
 
-            if v1[0] == 0 and v1[1] >= 0:
-                angle = 0.0
-            elif v1[0] == 0 and v1[1] < 0:
-                angle = 180.0
-            else:
-                angle = np.arccos(np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2)))
-                angle = angle * 180 / np.pi
+            v = pixel - cM
+            horizon = (0, 1)
+            distance = eucl_distance(pixel, cM)
+            angle = angle_between(v, horizon)
+            
+            feature_list.append({
+                'coordinate': pixel,
+                'distance': distance, 
+                'angle': angle
+            })
 
-            if v1[0] < 0:
-                angle = 360 - angle
-
-            distance = eucl_distance(pixel, (cx, cy))
-            feature_list.append({'distance': distance, 'angle': angle, 'coordinate': pixel})
-            max_distance = max(distance, max_distance)
+        max_distance = max([f['distance'] for f in feature_list])
         for f in feature_list:
             f['distance'] = f['distance'] / max_distance
+        
+        # ============= edit to here ===================
 
         '''Ellipse fitting'''
         ellipse = cv2.fitEllipse(contour)
@@ -104,6 +78,12 @@ def extract_feature(image, contours):
     return cnt_feature_dic_list, feature_dic
 
 
+def angle_between(p1, p2):
+    ang1 = np.arctan2(*p1[::-1])
+    ang2 = np.arctan2(*p2[::-1])
+    return np.rad2deg((ang1 - ang2) % (2 * np.pi))
+
+
 '''
 Goal :
 shift the cnt_list  to make the starting point to the main angle 
@@ -112,8 +92,6 @@ shift the cnt_list  to make the starting point to the main angle
 main angle : Let the ellipse fit the contour and take the long axis points' angle as main angle
 (We take y+ axis as 0')
 '''
-
-
 def rotate_contour(feature_list, main_angle):
     min_index = 0
     angle_offset = 0
