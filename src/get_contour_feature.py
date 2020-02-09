@@ -30,34 +30,37 @@ def extract_feature(image, contours):
     sample_number = min(factor_360, key=lambda factor: abs(factor - most_cnt_len))   # 360
 
     for contour in contours:
-        feature_list = []
+        pixel_features = []
         cM = get_centroid(contour)
 
         for pixel in contour:
             pixel = pixel[0]
 
-            v = pixel - cM
+            vector = pixel - cM
             horizon = (0, 1)
             distance = eucl_distance(pixel, cM)
-            angle = angle_between(v, horizon)
+            angle = angle_between(vector, horizon)
             
-            feature_list.append({
+            pixel_features.append({
                 'coordinate': pixel,
                 'distance': distance, 
                 'angle': angle
             })
 
-        max_distance = max([f['distance'] for f in feature_list])
-        for f in feature_list:
+        max_distance = max([f['distance'] for f in pixel_features])
+        for f in pixel_features:
             f['distance'] = f['distance'] / max_distance
-        
-        # ============= edit to here ===================
 
-        '''Ellipse fitting'''
-        ellipse = cv2.fitEllipse(contour)
-        # ((460.30, 714.03), (8.67, 21.88), 50.22039794921875) long, short axis and rotate angle
-        feature_list = rotate_contour(feature_list, ellipse[2])
-        sample_distance_list, sample_coordinate_list, cnt_color_gradient = sample_by_angle(image, feature_list, sample_number)
+        # find main rotate angle by fit ellipse
+        ellipse = cv2.fitEllipse(contour)   # ((694.17, 662.93), (10.77, 22.17), 171.98)
+        main_angle = ellipse[2]
+
+        # rotate contour pixels to fit main angle and re-calculate pixels' angle.
+        pixel_features = rotate_contour(pixel_features, main_angle)
+
+        # ------------edit to here-------------
+        
+        sample_distance_list, sample_coordinate_list, cnt_color_gradient = sample_by_angle(image, pixel_features, sample_number)
 
         cnt_sample_distance_list.append(sample_distance_list)
         cnt_color_gradient_list.append(cnt_color_gradient)
@@ -78,61 +81,53 @@ def extract_feature(image, contours):
     return cnt_feature_dic_list, feature_dic
 
 
-def angle_between(p1, p2):
-    ang1 = np.arctan2(*p1[::-1])
-    ang2 = np.arctan2(*p2[::-1])
+def angle_between(vec1, vec2):
+    '''Return angle(ranges from 0~360 degree) measured from vec2 to vec1'''
+    ang1 = np.arctan2(*vec1[::-1])
+    ang2 = np.arctan2(*vec2[::-1])
     return np.rad2deg((ang1 - ang2) % (2 * np.pi))
 
 
-'''
-Goal :
-shift the cnt_list  to make the starting point to the main angle 
+def rotate_contour(pixel_features, main_angle):
+    '''
+    Find the nearest pixel to the long axis of the ellipse(includes angle 0 and 180),
+    and shift pixels order to make the starting pixel to the begining.
 
-@param 
-main angle : Let the ellipse fit the contour and take the long axis points' angle as main angle
-(We take y+ axis as 0')
-'''
-def rotate_contour(feature_list, main_angle):
-    min_index = 0
-    angle_offset = 0
-    dis_0 = 1000
-    dis_180 = 1000
-    angle_0_dis = 0
-    angle_180_dis = 0
-    angle_0 = 0
-    angle_180 = 0
-    index_0 = 0
-    index_180 = 0
+    Args:
+        pixel_features: (list of dict) each dict refers to features of a pixel on the contour.
+        pixel_features[0] = {
+            'distance': distance between pixel and contour centroid.
+            'angle': angle between vector(centroid->pixel) and horizon.
+            'coordinate': (ndarray), x(row) and y(column) index of pixel, sized [2, ].
+        }
+        main_angle: main rotate angle of the contour from the fitting ellipse.
+    '''
+    
+    # find pixels nearest to long axis on angle 0 and 180 respectively
+    pixel_on_0 = min(pixel_features, key=lambda f: abs(f['angle'] - main_angle))
+    pixel_on_180 = min(pixel_features, key=lambda f: abs(f['angle'] - main_angle - 180))
 
-    for i, feature in enumerate(feature_list):
+    # choose the pixel with less distance to the centroid as starting pixel, record its angle and index.
+    start_pixel = pixel_on_0 if pixel_on_0['distance'] < pixel_on_180['distance'] else pixel_on_180
+    start_angle = start_pixel['angle']
+    start_index = 0
+    for i, f in enumerate(pixel_features):
+        if f['distance'] == start_pixel['distance'] and \
+           f['angle'] == start_pixel['angle'] and \
+           np.array_equal(f['coordinate'],start_pixel['coordinate']):
+            start_index = i
+            break
+    
+    # shift pixels order to make the starting pixel to the begining.
+    pixel_features = pixel_features[start_index:] + pixel_features[:start_index]
 
-        if abs(feature['angle'] - main_angle) < dis_0:
-            dis_0 = abs(feature['angle'] - main_angle)
-            angle_0_dis = feature['distance']
-            index_0 = i
-            angle_0 = feature['angle']
+    # re-calculate the angle starting from starting point's angle.
+    for pixel in pixel_features:
+        pixel['angle'] -= start_angle
+        if pixel['angle'] < 0:
+            pixel['angle'] += 360
 
-        if abs(feature['angle'] - main_angle - 180) < dis_180:
-            dis_180 = abs(feature['angle'] - main_angle - 180)
-            angle_180_dis = feature['distance']
-            index_180 = i
-            angle_180 = feature['angle']
-
-        if angle_0_dis < angle_180_dis:
-            min_index = index_0
-            angle_offset = angle_0
-        else:
-            min_index = index_180
-            angle_offset = angle_180
-
-    feature_list = feature_list[min_index:] + feature_list[:min_index]
-
-    for feature in feature_list:
-        feature['angle'] -= angle_offset
-        if feature['angle'] < 0:
-            feature['angle'] += 360
-
-    return feature_list
+    return pixel_features
 
 
 '''
@@ -140,8 +135,6 @@ def rotate_contour(feature_list, main_angle):
 contour_list : rotated (shifted) contour list that the starting point to the main angle 
 n_sample : the sample refers to the PR80 point's dimension
 '''
-
-
 def sample_by_angle(img, feature_list, n_sample):
     '''
     Record the angle of the sample points to the centorid
