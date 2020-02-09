@@ -1,34 +1,24 @@
 import numpy as np
 import cv2
 import os
+import math
 import time
 import csv
 import argparse
 import matplotlib.pyplot as plt
-from canny import canny_edge_detect
-from utils import check_overlap, avg_img_gradient, evaluate_detection_performance
-from misc import check_and_cluster
-from contour_drawer import ContourDrawer
 from ipdb import set_trace as pdb
 from tqdm import tqdm
 
+from canny import canny_edge_detect
+from contour_drawer import ContourDrawer
+from utils import get_edge_group
+from misc import check_overlap, avg_img_gradient, evaluate_detection_performance
 
-# TODO
-# * no enhence edge for hed
 
-# 736 will make the colony perfomance the best. (ref to yun-tao colony)
-resize_height = 736.0
-
-# Tells that which method is used first
+resize_height = 736.0       # 736 will make the colony perfomance the best. (ref to yun-tao colony)
 _use_canny_edge = False
-_use_structure_edge = True
-_use_hed_edge = True
-# Only used in SF
 _enhance_edge = True
-# Decide whether local/global equalization to use (True-->Local)
-_gray_value_redistribution_local = True
-# Decide if excecute 1st evalution
-_evaluate = False
+_evaluate = False   # Decide if excecute 1st evalution
 
 input_dir = '../input/image/'
 strct_edge_dir = '../input/edge_image/'  # structure forest output
@@ -40,79 +30,24 @@ output_dir = './'
 
 csv_output = '../output_csv_6_8[combine_result_before_filter_obvious]/'
 evaluate_csv_path = '../evaluate_data/groundtruth_csv/generalize_csv/'
-
-DRAW_PROCESS = False
 IMG_LIST = ['IMG_ (39).jpg', 'IMG_ (10).jpg', 'IMG_ (16).jpg' ]
 TEST = True
-TEST_IMG = 'IMG_ (33).jpg'
-EXCEPTION_LIST = ['IMG_ (3).jpg', 'IMG_ (9).jpg']
 
-
-def get_edge_group(drawer, edge_img, edge_type, do_enhance=False, do_draw=False):
-    ''' Do contour detection, filter contours, feature extract and cluster.
-
-    Args:
-        edge_img: (ndarray) edge img element 0~255, sized [736, N]
-        edge_type: (str) edge type name
-        do_enhance: (bool) whether enhance edge img
-        do_draw: (bool) whether draw process figures
-    
-    Returns:
-        grouped_cnt: (list of dict)
-        grouped_cnt[0] = {
-            'cnt': (list of ndarray) sized [num_of_cnts, num_of_pixels, 1, 2]
-            'obvious_weight': (int) (e.g. 0)
-            'group_dic': (list of dict)
-        }
-        grouped_cnt[0]['group_dic'] = {
-            'cnt': (ndarray) sized [num_of_pixels, 1, 2]
-            'shape': (list of float normalized to 0~1) len = shape_sample_num(90/180/360)
-            'color': (list of float) (e.g. [45.83, 129.31, 133.44]) len = 3?
-            'size': (list of float) (e.g. [0.07953])
-            'color_gradient': (float) (e.g. 64.5149)
-        }
-    '''
-
-    if do_draw:
-        img_path = '{}{}_b_OriginEdge{}.jpg'.format(output_dir, img_name, edge_type)
-        cv2.imwrite(img_path, edge_img)
-
-    if do_enhance:  
-        # Enhance edge
-        if _gray_value_redistribution_local:
-            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-            edge_img = clahe.apply(edge_img)
-        else:
-            edge_img = cv2.equalizeHist(edge_img) # golbal equalization
-
-        if do_draw:
-            cv2.imwrite(output_dir + img_name + '_c_enhanced_edge[' + str(edge_type) + '].jpg', edged)
-
-    '''find contours'''
-    # threshold to 0 or 255
-    edge_img = cv2.threshold(edge_img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
-
-    # find closed contours, return (list of ndarray), len = Num_of_cnts, ele = (Num_of_pixels, 1, 2(x,y))
-    contours = cv2.findContours(edge_img, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)[-2]
-
-    if do_draw:
-        drawer.reset()
-        for contour in contours:
-            drawer.draw([contour])
-        desc = 'd_OriginContour_{}'.format(edge_type)
-        drawer.save(desc)
-
-    # feature filter, extract and cluster
-    grouped_cnt = check_and_cluster(contours, drawer, edge_type, DRAW_PROCESS)
-
-    return grouped_cnt
+# ================ CHANGABLE ===============
+DRAW_PROCESS = True
+TEST_IMG = 'IMG_ (39).jpg'
+KEEP_OVERLAP = ['inner', 'all']     # 'inner', 'outer', 'all'
+DO_COMBINE = True
+_use_structure_edge = True
+_use_hed_edge = True
+# ==========================================
 
 
 t_start_time = time.time()
 max_time_img = ''
 min_time_img = ''
-min_time = 99999.0
-max_time = 0.0
+min_time = math.inf
+max_time = -math.inf
 evaluation_csv = [['Image name', 'TP', 'FP', 'FN', 'Precision', 'Recall', 'F_measure', 'Error_rate']]
 
 
@@ -160,26 +95,40 @@ for i, img_path in enumerate(tqdm(IMG_LIST)):
         edge_type = 'HED'
         edge_imgs.append((edge_path, edge_type))
     
+    # detect contours, filter, extract features, cluster for edge image
     for edge_path, edge_type in edge_imgs:
         if not os.path.isfile(edge_path):
             print(f'[Error] EDGE FILE {edge_path} does not exist!')
             continue
         edge_img = cv2.imread(edge_path, cv2.IMREAD_GRAYSCALE)
         edge_img = cv2.resize(edge_img, (0, 0), fx=resize_factor, fy=resize_factor)     # shape: (736, *)
-        edge_group = get_edge_group(drawer, edge_img, edge_type=edge_type, do_enhance=True, do_draw=DRAW_PROCESS)
-        for g in edge_group:
-            final_differ_edge_group.append(g)
 
-    # # combine
-    # strct_edge_img = strct_edge_dir + img_name + '_edge.jpg'
-    # hed_edge_img = hed_edge_dir + img_name + '_hed.png'
-    # strct_edge = cv2.imread(strct_edge_img, cv2.IMREAD_GRAYSCALE)
-    # hed_edge = cv2.imread(hed_edge_img, cv2.IMREAD_GRAYSCALE)
-    # edge = (strct_edge + hed_edge)
-    # edge = cv2.resize(edge, (0, 0), fx=resize_height / img_height, fy=resize_height / img_height)
-    # edge_group = get_edge_group(drawer, edge, edge_type='Structure', do_enhance=True, do_draw=DRAW_PROCESS)
-    # for g in edge_group:
-    #     final_differ_edge_group.append(g)
+        for keep in KEEP_OVERLAP:
+            edge_group = get_edge_group(drawer, edge_img, edge_type, keep=keep, do_draw=DRAW_PROCESS)
+            for g in edge_group:
+                final_differ_edge_group.append(g)
+
+    #=============================================================================
+
+    # combine
+    if DO_COMBINE:
+        strct_edge_path = strct_edge_dir + img_name + '_edge.jpg'
+        hed_edge_path = hed_edge_dir + img_name + '_hed.png'
+
+        if os.path.isfile(strct_edge_path) and os.path.isfile(hed_edge_path):
+            strct_edge = cv2.imread(strct_edge_path, cv2.IMREAD_GRAYSCALE)
+            hed_edge = cv2.imread(hed_edge_path, cv2.IMREAD_GRAYSCALE)
+            edge = (strct_edge + hed_edge)
+            edge = cv2.resize(edge, (0, 0), fx=resize_height / img_height, fy=resize_height / img_height)
+
+            for keep in KEEP_OVERLAP:
+                edge_group = get_edge_group(drawer, edge, 'Combine', keep=keep, do_draw=DRAW_PROCESS)
+            for g in edge_group:
+                final_differ_edge_group.append(g)
+        else:
+            print('[Error] Lack of edge images for combine')
+
+    #=============================================================================
 
     # check two edge contour overlap
     compare_overlap_queue = []
