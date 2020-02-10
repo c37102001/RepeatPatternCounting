@@ -84,5 +84,4 @@ def hierarchical_clustering(feature_list, img_name, para, edge_type, cut_method=
 
     # print 'acceleration.argmax():',acceleration.argmax()
     clusters = fcluster(cnt_hierarchy, max_cut_distance, criterion='distance')
-    print('----------------------------------')
     return clusters

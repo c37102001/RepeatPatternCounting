@@ -8,7 +8,8 @@ from ipdb import set_trace as pdb
 # Decide whether local/global equalization to use (True-->Local)
 _gray_value_redistribution_local = True
 
-def get_edge_group(drawer, edge_img, edge_type, keep, do_enhance=True, do_draw=False):
+
+def get_edge_group(drawer, edge_img, edge_type, keep='inner', do_enhance=True, do_draw=False):
     ''' Do contour detection, filter contours, feature extract and cluster.
 
     Args:
@@ -27,8 +28,8 @@ def get_edge_group(drawer, edge_img, edge_type, keep, do_enhance=True, do_draw=F
         grouped_cnt[0]['group_dic'] = {
             'cnt': (ndarray) sized [num_of_pixels, 1, 2]
             'shape': (list of float normalized to 0~1) len = shape_sample_num(90/180/360)
-            'color': (list of float) (e.g. [45.83, 129.31, 133.44]) len = 3?
-            'size': (list of float) (e.g. [0.07953])
+            'color': (list of float) (e.g. [45.83, 129.31, 133.44]) len = 3
+            'size': (list of float) (e.g. [0.07953, ...])
             'color_gradient': (float) (e.g. 64.5149)
         }
     '''
@@ -64,15 +65,15 @@ def get_edge_group(drawer, edge_img, edge_type, keep, do_enhance=True, do_draw=F
     # filter contours by area, perimeter, solidity, edge_num
     height, width = drawer.color_img.shape[:2]
     contours = filter_contours(contours, height, width)
-    if do_draw or True:
-        desc = '_e1_Filterd_{}'.format(edge_type)
+    if do_draw:
+        desc = 'e1_Filterd_{}'.format(edge_type)
         lasy_do_draw(drawer, contours, desc)
 
     # remove outer overlap contour
     if not keep == 'all':
         contours = remove_overlap(contours, keep)
-        if do_draw or True:
-            desc = '_e2_RemoveOverlap_{}'.format(edge_type)
+        if do_draw:
+            desc = 'e2_RemoveOverlap_{}'.format(edge_type)
             lasy_do_draw(drawer, contours, desc)
 
     # Extract contour color, size, shape, color_gradient features
@@ -89,7 +90,7 @@ def cluster_features(contours, cnt_feature_dic_list, feature_dic, drawer, edge_t
     label_list_dic = {}
     # Respectively use shape, color, and size as feature set to cluster
     for feature_type in ['size', 'shape', 'color']:
-        print(f'[{edge_type}] {feature_type}')
+        # print(f'[{edge_type}] {feature_type}')
 
         feature_list = feature_dic[feature_type]
 
@@ -151,8 +152,8 @@ def cluster_features(contours, cnt_feature_dic_list, feature_dic, drawer, edge_t
 
 def filter_contours(contours, re_height, re_width):
     MIN_PERIMETER = 60
-    MAX_IMG_SIZE = 5
-    MIN_IMG_SIZE = 30000
+    MAX_IMG_SIZE = 1 / 5
+    MIN_IMG_SIZE = 1 / 30000
     SOLIDITY_THRE = 0.5
     MAX_EDGE_NUM = 50
     
@@ -163,7 +164,7 @@ def filter_contours(contours, re_height, re_width):
             continue
         
         contour_area = cv2.contourArea(c)
-        if contour_area < (re_height * re_width) / MIN_IMG_SIZE or contour_area > (re_height * re_width) / MAX_IMG_SIZE:
+        if contour_area < (re_height * re_width) * MIN_IMG_SIZE or contour_area > (re_height * re_width) * MAX_IMG_SIZE:
             continue
 
         convex_area = cv2.contourArea(cv2.convexHull(c))

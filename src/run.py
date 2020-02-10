@@ -16,18 +16,12 @@ from misc import check_overlap, avg_img_gradient, evaluate_detection_performance
 
 
 resize_height = 736.0       # 736 will make the colony perfomance the best. (ref to yun-tao colony)
-_use_canny_edge = False
 _enhance_edge = True
 _evaluate = False   # Decide if excecute 1st evalution
 
 input_dir = '../input/image/'
 strct_edge_dir = '../input/edge_image/'  # structure forest output
 hed_edge_dir = '../input/hed_edge_image/'  # hed edge
-# output_dir = '../output/'
-# output_dir = '../output_hed/'
-# output_dir = '../output_hed_strct/'
-output_dir = './'
-
 csv_output = '../output_csv_6_8[combine_result_before_filter_obvious]/'
 evaluate_csv_path = '../evaluate_data/groundtruth_csv/generalize_csv/'
 IMG_LIST = ['IMG_ (39).jpg', 'IMG_ (10).jpg', 'IMG_ (16).jpg' ]
@@ -35,9 +29,12 @@ TEST = True
 
 # ================ CHANGABLE ===============
 DRAW_PROCESS = True
-TEST_IMG = 'IMG_ (39).jpg'
-KEEP_OVERLAP = ['inner', 'all']     # 'inner', 'outer', 'all'
-DO_COMBINE = True
+TEST_IMG = 'IMG_ (24).jpg'
+KEEP_OVERLAP = ['inner']     # 'inner', 'outer', 'all'
+DO_COMBINE = False
+
+output_dir = '../output/new/'
+_use_canny_edge = False
 _use_structure_edge = True
 _use_hed_edge = True
 # ==========================================
@@ -81,7 +78,7 @@ for i, img_path in enumerate(tqdm(IMG_LIST)):
     final_differ_edge_group = []    # combine edge detection result
     if _use_canny_edge:
         canny_edge = canny_edge_detect(img)
-        canny_group = get_edge_group(drawer, canny_edge, edge_type='Canny', do_draw=DRAW_PROCESS)
+        canny_group = get_edge_group(drawer, canny_edge, edge_type='Canny', do_enhance=False, do_draw=DRAW_PROCESS)
         for edge_group in canny_group:
             final_differ_edge_group.append(edge_group)
     
