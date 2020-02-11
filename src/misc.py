@@ -11,7 +11,7 @@ def remove_overlap(contours, keep):
     overlap_idx = []
 
     for i, cnt1 in enumerate(contours[:-1]):
-        for j, cnt2 in enumerate(contours[i+1: ]):
+        for j, cnt2 in enumerate(contours[i+1: ], start=i+1):
             if is_overlap(cnt1, cnt2):
                 if keep == 'inner':
                     overlap_idx.append(j)
@@ -26,15 +26,12 @@ def remove_overlap(contours, keep):
     overlap_idx = list(set(overlap_idx))
     keep_idx = [i for i in range(len(contours)) if i not in overlap_idx]
     keep_contours = [contours[idx] for idx in keep_idx]
+    discard_contours = [contours[idx] for idx in overlap_idx]
     
-    return keep_contours
+    return keep_contours, discard_contours
 
 
 def is_overlap(cnt1, cnt2):
-    """
-    Determine that if one contour contains another one.
-    """
-
     c1M = get_centroid(cnt1)
     c2M = get_centroid(cnt2)
     c1D = abs(cv2.pointPolygonTest(cnt1, c1M, True))

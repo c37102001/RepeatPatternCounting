@@ -41,7 +41,7 @@ def hierarchical_clustering(feature_list, feature_type, edge_type, drawer, do_dr
     # plot difference bar chart
     if do_draw:
         plt.bar(x=range(len(diff_list)), height=diff_list)
-        plt.title(f'{feature_type} cut idx: {target_diff_idx} | value: {target_diff:.3f} | ratio: {max_ratio:.3f}')
+        plt.title(f'{feature_type.capitalize()} cut idx: {target_diff_idx} | value: {target_diff:.3f} | ratio: {max_ratio:.3f}')
         save_path = f'{drawer.output_path}{drawer.img_name}_f_{edge_type}({feature_type})_hist.png'
         plt.savefig(save_path)
         plt.close()

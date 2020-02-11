@@ -1,6 +1,7 @@
 import numpy as np
 import cv2
 from ipdb import set_trace as pdb
+from itertools import cycle
 
 
 class ContourDrawer:
@@ -8,26 +9,27 @@ class ContourDrawer:
         self.color_img = color_img
         self.output_path = output_path
         self.img_name = img_name
-        self.switchColor = \
-            [(128, 255, 0), (255, 128, 255), (0, 255, 255), (255, 192, 128),
-             (128, 192, 64), (128, 255, 160), (128, 128, 128), (128, 0, 128)]
-        self.reset()
+        self.switchColor = cycle(
+            [(255, 255, 0), (255, 0, 255), (0, 255, 255), (255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 128, 0),
+             (255, 0, 128), (128, 0, 255), (128, 255, 0), (0, 128, 255), (0, 255, 128), (128, 128, 0), (128, 0, 128),
+             (0, 128, 128), (255, 64, 0), (255, 0, 64), (64, 255, 0), (64, 0, 255), (0, 255, 64), (0, 64, 255)])
 
-    def reset(self):
-        self.color_index = 0
-        self.canvas = np.zeros(self.color_img.shape, np.uint8)
+    def blank_img(self):
+        return np.zeros(self.color_img.shape, np.uint8)
     
-    def draw(self, contour, given_img=None):
-        if given_img is not None:   # draw with given contour img
-            self.canvas = given_img
+    def draw(self, contours, given_img=None):
+        if given_img is None:
+            given_img = self.blank_img()
+        for c in contours:
+            cv2.drawContours(given_img, [c], -1, next(self.switchColor), 2)
+        return given_img
+    
+    def draw_one_color(self, contours, given_img=None):
+        if given_img is None:
+            given_img = self.blank_img()
+        given_img = cv2.drawContours(given_img, contours, -1, next(self.switchColor), 2)
+        return given_img
 
-        color = self.switchColor[self.color_index % len(self.switchColor)]
-        cv2.drawContours(self.canvas, contour, -1, color, 2)
-        self.color_index += 1
-
-        if given_img is not None:
-            return self.canvas
-
-    def save(self, desc):
+    def save(self, img, desc):
         img_path = '{}{}_{}.jpg'.format(self.output_path, self.img_name, desc)
-        cv2.imwrite(img_path, self.canvas)
+        cv2.imwrite(img_path, img)
