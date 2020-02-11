@@ -66,15 +66,18 @@ def get_edge_group(drawer, edge_img, edge_type, keep='inner', do_enhance=True, d
     height, width = drawer.color_img.shape[:2]
     contours = filter_contours(contours, height, width)
     if do_draw:
-        desc = 'e1_Filterd_{}'.format(edge_type)
-        lasy_do_draw(drawer, contours, desc)
-
+        lasy_do_draw(drawer, contours,  desc = 'e1_Filterd_{}'.format(edge_type))
+    
     # remove outer overlap contour
     if not keep == 'all':
         contours = remove_overlap(contours, keep)
         if do_draw:
-            desc = 'e2_RemoveOverlap_{}'.format(edge_type)
-            lasy_do_draw(drawer, contours, desc)
+            lasy_do_draw(drawer, contours, 'e2_RemoveOverlap_{}'.format(edge_type))
+
+    # return if too less contours
+    if len(contours) <= 3:
+        print(f'[Warning] {edge_type} contours less than 3.')
+        return []
 
     # Extract contour color, size, shape, color_gradient features
     cnt_feature_dic_list, feature_dic = get_contour_feature(drawer.color_img, contours, edge_type)
@@ -90,16 +93,14 @@ def cluster_features(contours, cnt_feature_dic_list, feature_dic, drawer, edge_t
     label_list_dic = {}
     # Respectively use shape, color, and size as feature set to cluster
     for feature_type in ['size', 'shape', 'color']:
-        # print(f'[{edge_type}] {feature_type}')
-
         feature_list = feature_dic[feature_type]
 
-        # hierarchical clustering, output the classified consequence
-        label_list = hierarchical_clustering(feature_list, drawer.img_name, feature_type, edge_type, do_draw=do_draw)
-        # pdb()
+        # label_list = ndarray([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 3, 3, 3, 3, 3, 3, 3, 3, 2, 2, 2]), len=len(ft_list)
+        label_list = hierarchical_clustering(feature_list, drawer.img_name, feature_type, edge_type, drawer, do_draw)
 
+        # array([1, 2, 3]), array([ 10, 3, 8])
         unique_label, label_counts = np.unique(label_list, return_counts=True) 
-        # array([1, 2]), array([ 66, 101])
+        
 
         if do_draw:
             drawer.reset()
@@ -108,6 +109,7 @@ def cluster_features(contours, cnt_feature_dic_list, feature_dic, drawer, edge_t
                 for i in range(len(label_list)):
                     if label_list[i] == label:
                         tmp_splited_group.append(contours[i])
+                grouped_cnt
                 
                 drawer.draw(np.array(tmp_splited_group))
 

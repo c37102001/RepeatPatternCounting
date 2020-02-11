@@ -28,12 +28,12 @@ IMG_LIST = ['IMG_ (39).jpg', 'IMG_ (10).jpg', 'IMG_ (16).jpg' ]
 TEST = True
 
 # ================ CHANGABLE ===============
-DRAW_PROCESS = True
-TEST_IMG = 'IMG_ (24).jpg'
+DRAW_PROCESS = False
+TEST_IMG = 'IMG_ (39).jpg'
 KEEP_OVERLAP = ['inner']     # 'inner', 'outer', 'all'
 DO_COMBINE = False
 
-output_dir = '../output/new/'
+output_dir = '../output/exp/'
 _use_canny_edge = False
 _use_structure_edge = True
 _use_hed_edge = True
