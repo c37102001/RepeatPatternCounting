@@ -8,7 +8,8 @@ from ipdb import set_trace as pdb
 # Decide whether local/global equalization to use (True-->Local)
 _gray_value_redistribution_local = True
 
-def get_edge_group(drawer, edge_img, edge_type, keep, do_enhance=True, do_draw=False):
+
+def get_edge_group(drawer, edge_img, edge_type, keep='inner', do_enhance=True, do_draw=False):
     ''' Do contour detection, filter contours, feature extract and cluster.
 
     Args:
@@ -27,8 +28,8 @@ def get_edge_group(drawer, edge_img, edge_type, keep, do_enhance=True, do_draw=F
         grouped_cnt[0]['group_dic'] = {
             'cnt': (ndarray) sized [num_of_pixels, 1, 2]
             'shape': (list of float normalized to 0~1) len = shape_sample_num(90/180/360)
-            'color': (list of float) (e.g. [45.83, 129.31, 133.44]) len = 3?
-            'size': (list of float) (e.g. [0.07953])
+            'color': (list of float) (e.g. [45.83, 129.31, 133.44]) len = 3
+            'size': (list of float) (e.g. [0.07953, ...])
             'color_gradient': (float) (e.g. 64.5149)
         }
     '''
@@ -58,22 +59,35 @@ def get_edge_group(drawer, edge_img, edge_type, keep, do_enhance=True, do_draw=F
     contours = cv2.findContours(edge_img, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)[-2]
 
     if do_draw:
+        img = drawer.draw(contours)
         desc = 'd_OriginContour_{}'.format(edge_type)
-        lasy_do_draw(drawer, contours, desc)
-
+        drawer.save(img, desc)
+    
     # filter contours by area, perimeter, solidity, edge_num
     height, width = drawer.color_img.shape[:2]
     contours = filter_contours(contours, height, width)
-    if do_draw or True:
-        desc = '_e1_Filterd_{}'.format(edge_type)
-        lasy_do_draw(drawer, contours, desc)
-
+    if do_draw:
+        img = drawer.draw(contours)
+        desc = 'e1_Filterd_{}'.format(edge_type)
+        drawer.save(img, desc)
+    
     # remove outer overlap contour
     if not keep == 'all':
-        contours = remove_overlap(contours, keep)
-        if do_draw or True:
-            desc = '_e2_RemoveOverlap_{}'.format(edge_type)
-            lasy_do_draw(drawer, contours, desc)
+        contours, discard_contours = remove_overlap(contours, 'inner')
+        if do_draw:
+            img = drawer.draw_one_color(contours)
+            img = drawer.draw_one_color(discard_contours, img)
+            desc = 'e2_Overlapped_{}'.format(edge_type)
+            drawer.save(img, desc)
+
+            img = drawer.draw_one_color(contours)
+            desc = 'e2_RemovedOverlapped_{}'.format(edge_type)
+            drawer.save(img, desc)
+    
+    # return if too less contours
+    if len(contours) <= 3:
+        print(f'[Warning] {edge_type} contours less than 3.')
+        return []
 
     # Extract contour color, size, shape, color_gradient features
     cnt_feature_dic_list, feature_dic = get_contour_feature(drawer.color_img, contours, edge_type)
@@ -86,73 +100,61 @@ def get_edge_group(drawer, edge_img, edge_type, keep, do_enhance=True, do_draw=F
 
 def cluster_features(contours, cnt_feature_dic_list, feature_dic, drawer, edge_type, do_draw=False):
 
-    label_list_dic = {}
+    feature_label = {}
     # Respectively use shape, color, and size as feature set to cluster
     for feature_type in ['size', 'shape', 'color']:
-        print(f'[{edge_type}] {feature_type}')
-
         feature_list = feature_dic[feature_type]
 
-        # hierarchical clustering, output the classified consequence
-        label_list = hierarchical_clustering(feature_list, drawer.img_name, feature_type, edge_type, do_draw=do_draw)
-        # pdb()
-
-        unique_label, label_counts = np.unique(label_list, return_counts=True) 
-        # array([1, 2]), array([ 66, 101])
+        # label_list = ndarray([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 3, 3, 3, 3, 3, 3, 3, 3, 2, 2, 2]), len=len(ft_list)
+        label_list = hierarchical_clustering(feature_list, feature_type, edge_type, drawer, do_draw)
 
         if do_draw:
-            drawer.reset()
-            for label in unique_label:
-                tmp_splited_group = []
-                for i in range(len(label_list)):
-                    if label_list[i] == label:
-                        tmp_splited_group.append(contours[i])
-                
-                drawer.draw(np.array(tmp_splited_group))
-
+            img = drawer.blank_img()
+            for label in set(label_list):
+                grouped_cnts = [c for i, c in enumerate(contours) if label_list[i] == label]
+                img = drawer.draw_one_color(grouped_cnts, img)
             desc = 'f_Feature{}_{}'.format(feature_type.capitalize(), edge_type)
-            drawer.save(desc)
-        
-        # save the 3 types of the classified output
-        label_list_dic[feature_type] = label_list
+            drawer.save(img, desc)
+
+        feature_label[feature_type] = label_list
 
 
-    # combine the label clustered by size, shape, and color. ex: [0_1_1 , 2_0_1]
-    combine_label_list = []
-    for size, shape, color in zip(label_list_dic['size'], label_list_dic['shape'], label_list_dic['color']):
-        combine_label_list.append('%d_%d_%d' % (size, shape, color))
-
-    unique_label, label_counts = np.unique(combine_label_list, return_counts=True)
+    # combine the label clustered by size, shape, and color. ex: (0,1,1), (2,0,1)
+    combine_labels = []
+    for size, shape, color in zip(feature_label['size'], feature_label['shape'], feature_label['color']):
+        combine_labels.append((size, shape, color))
 
     # find the final group by the intersected label and draw
-    drawer.reset()
+    img = drawer.blank_img()
     final_group = []
-    color_index = 0
-    for label in unique_label:
-        tmp_group = []
-        for i in range(len(contours)):
-            if combine_label_list[i] == label:
-                tmp_group.append(cnt_feature_dic_list[i])
-
-        tmp_cnt_group = [cnt_dic['cnt'] for cnt_dic in tmp_group]
-
-        if len(tmp_cnt_group) < 2:
+    for combine_label in set(combine_labels):
+        if combine_labels.count(combine_label) < 2:
             continue
 
-        drawer.draw(np.array(tmp_cnt_group))
-        final_group.append({'cnt': contours, 'obvious_weight': 0, 'group_dic': tmp_group})
+        label_idx = [idx for idx, label in enumerate(combine_labels) if label == combine_label]
+        grouped_ft_dict_list = [cnt_feature_dic_list[i] for i in label_idx]
+        final_group.append({
+            'cnt': contours, 
+            'obvious_weight': 0,
+            'group_dic': grouped_ft_dict_list
+        })
+
+        # for do_draw
+        cnts = [contours[i] for i in label_idx]
+        img = drawer.draw_one_color(cnts, img)
+        
 
     if do_draw:
         desc = 'g_OriginalResult_{}'.format(edge_type)
-        drawer.save(desc)
-
+        drawer.save(img, desc)
+    
     return final_group
 
 
 def filter_contours(contours, re_height, re_width):
     MIN_PERIMETER = 60
-    MAX_IMG_SIZE = 5
-    MIN_IMG_SIZE = 30000
+    MAX_CNT_SIZE = 1 / 5
+    MIN_CNT_SIZE = 1 / 30000
     SOLIDITY_THRE = 0.5
     MAX_EDGE_NUM = 50
     
@@ -163,7 +165,7 @@ def filter_contours(contours, re_height, re_width):
             continue
         
         contour_area = cv2.contourArea(c)
-        if contour_area < (re_height * re_width) / MIN_IMG_SIZE or contour_area > (re_height * re_width) / MAX_IMG_SIZE:
+        if contour_area < (re_height * re_width) * MIN_CNT_SIZE or contour_area > (re_height * re_width) * MAX_CNT_SIZE:
             continue
 
         convex_area = cv2.contourArea(cv2.convexHull(c))
@@ -180,9 +182,3 @@ def filter_contours(contours, re_height, re_width):
 
     return accept_contours
 
-
-def lasy_do_draw(drawer, contours, desc):
-    drawer.reset()
-    for contour in contours:
-        drawer.draw([contour])
-    drawer.save(desc)

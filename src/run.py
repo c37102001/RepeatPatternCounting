@@ -16,18 +16,12 @@ from misc import check_overlap, avg_img_gradient, evaluate_detection_performance
 
 
 resize_height = 736.0       # 736 will make the colony perfomance the best. (ref to yun-tao colony)
-_use_canny_edge = False
 _enhance_edge = True
 _evaluate = False   # Decide if excecute 1st evalution
 
 input_dir = '../input/image/'
 strct_edge_dir = '../input/edge_image/'  # structure forest output
 hed_edge_dir = '../input/hed_edge_image/'  # hed edge
-# output_dir = '../output/'
-# output_dir = '../output_hed/'
-# output_dir = '../output_hed_strct/'
-output_dir = './'
-
 csv_output = '../output_csv_6_8[combine_result_before_filter_obvious]/'
 evaluate_csv_path = '../evaluate_data/groundtruth_csv/generalize_csv/'
 IMG_LIST = ['IMG_ (39).jpg', 'IMG_ (10).jpg', 'IMG_ (16).jpg' ]
@@ -36,8 +30,11 @@ TEST = True
 # ================ CHANGABLE ===============
 DRAW_PROCESS = True
 TEST_IMG = 'IMG_ (39).jpg'
-KEEP_OVERLAP = ['inner', 'all']     # 'inner', 'outer', 'all'
-DO_COMBINE = True
+KEEP_OVERLAP = ['inner']     # 'inner', 'outer', 'all'
+DO_COMBINE = False
+
+output_dir = '../output/exp/'
+_use_canny_edge = False
 _use_structure_edge = True
 _use_hed_edge = True
 # ==========================================
@@ -73,15 +70,15 @@ for i, img_path in enumerate(tqdm(IMG_LIST)):
     
     # resize_height=736, shape: (1365, 2048, 3) -> (736,1104,3)
     resize_factor = resize_height / img_height
-    img = cv2.resize(input_img, (0, 0), fx=resize_factor, fy=resize_factor)
-    drawer = ContourDrawer(img, output_dir, img_name)
+    resi_input_img = cv2.resize(input_img, (0, 0), fx=resize_factor, fy=resize_factor)
+    drawer = ContourDrawer(resi_input_img, output_dir, img_name)
     if DRAW_PROCESS:
-        cv2.imwrite(output_dir + img_name + '_a_original_image.jpg', img)
+        cv2.imwrite(output_dir + img_name + '_a_original_image.jpg', resi_input_img)
 
     final_differ_edge_group = []    # combine edge detection result
     if _use_canny_edge:
         canny_edge = canny_edge_detect(img)
-        canny_group = get_edge_group(drawer, canny_edge, edge_type='Canny', do_draw=DRAW_PROCESS)
+        canny_group = get_edge_group(drawer, canny_edge, edge_type='Canny', do_enhance=False, do_draw=DRAW_PROCESS)
         for edge_group in canny_group:
             final_differ_edge_group.append(edge_group)
     
@@ -147,7 +144,8 @@ for i, img_path in enumerate(tqdm(IMG_LIST)):
     compare_overlap_queue = check_overlap(compare_overlap_queue, keep='group_weight')
 
     
-    drawer.reset()
+    # drawer.reset()
+    img = drawer.blank_img()
     _label = [x['label'] for x in compare_overlap_queue]
     print('label_dic:', [(y, _label.count(y)) for y in set(_label)])
 
@@ -182,7 +180,8 @@ for i, img_path in enumerate(tqdm(IMG_LIST)):
 
         if len(tmp_cnt_group) < 2:
             continue
-        drawer.draw(np.array(tmp_cnt_group))
+        # drawer.draw(np.array(tmp_cnt_group))
+        img = drawer.draw_one_color(np.array(tmp_cnt_group), img)
 
         final_group.append({'cnt': tmp_cnt_group, 'avg_area': avg_area, 'cover_area': cnt_area,
                             'color_gradient': avg_color_gradient, 'shape_factor': avg_shape_factor,
@@ -190,10 +189,12 @@ for i, img_path in enumerate(tqdm(IMG_LIST)):
 
     if DRAW_PROCESS:
         desc = 'g_RemoveOverlapCombineCnt'
-        drawer.save(desc)
+        # drawer.save(desc)
+        drawer.save(img, desc)
 
     # line 637 - line 712 obviousity filter
-    contour_image = drawer.canvas
+    # contour_image = drawer.canvas
+    contour_image = img
     obvious_list = ['cover_area', 'color_gradient', 'shape_factor']
     # sort final cnt group by cover_area , shape_factor and color_gradient
     for obvious_para in obvious_list:
@@ -321,9 +322,7 @@ for i, img_path in enumerate(tqdm(IMG_LIST)):
 
     # draw final result
     final_group_cnt = []
-    contour_image = img.copy()
-    contour_image[:] = contour_image[:] / 3.0    # darken the image to make the contour visible
-
+    img = resi_input_img / 3.0    # darken the image to make the contour visible
     # sort list from little to large
     final_nonoverlap_cnt_group.sort(key=lambda x: len(x['cnt']), reverse=False)
 
@@ -333,8 +332,7 @@ for i, img_path in enumerate(tqdm(IMG_LIST)):
             continue
 
         final_group_cnt.append(tmp_group['cnt'])
-
-        contour_image = drawer.draw(tmp_group['cnt'], contour_image)
+        img = drawer.draw_one_color(tmp_group['cnt'], img)
 
     if _evaluate:
         resize_ratio = resize_height / float(img_height)
@@ -342,7 +340,7 @@ for i, img_path in enumerate(tqdm(IMG_LIST)):
                                                                     resize_ratio, evaluate_csv_path)
         evaluation_csv.append([img_name, tp, fp, fn, pr, re, fm, er])
 
-    contour_image = cv2.resize(contour_image, (0, 0), fx=1/resize_factor, fy=1/resize_factor)
+    contour_image = cv2.resize(img, (0, 0), fx=1/resize_factor, fy=1/resize_factor)
     combine_image = np.concatenate((input_img, contour_image), axis=1)
 
     cv2.imwrite(output_dir + img_name + '_l_FinalResult.jpg', combine_image)

@@ -1,88 +1,50 @@
 import numpy as np
 from scipy.cluster.hierarchy import linkage, fcluster
 import matplotlib.pyplot as plt
+from ipdb import set_trace as pdb
 
 
-def hierarchical_clustering(feature_list, img_name, para, edge_type, cut_method='elbow', do_draw=False):
-    # hierarchically link cnt by order of distance from distance method 'ward'
-    # Output a hierarchical tree as ppt. page 22.
-    cnt_hierarchy = linkage(feature_list, 'ward')
+AVG_NUM = 5
 
-    '''Combine two groups only when the group distance is smaller than the max__cut_distance.'''
-    max_cut_distance = 0
-    if cut_method == 'elbow':
-        last = cnt_hierarchy[:, 2]
-        last = [x for x in last if x > 0]
+def hierarchical_clustering(feature_list, feature_type, edge_type, drawer, do_draw=False):
+    
+    # hierarchically link features by order of distance(measured by 'ward'), output a hierarchical tree
+    # return ndarray sized [#feature_list-1, 4], 4 means (group idx1, gp idx2, gp_distance, included ele num)
+    feature_dist_hierarchy = linkage(feature_list, 'ward')   
 
-        '''distance of grooup distance'''
-        acceleration = np.diff(last)
+    # distance between every two groups, sized [#feature - 1]
+    dist_list = feature_dist_hierarchy[:, 2]
 
-        # acceleration = map(abs, np.diff(acceleration) )
+    # difference of distance between previous one, sized [#feature - 2]
+    diff_list = np.diff(dist_list)
+    
+    # count differ ratio between previous AVG_NUM differs, sized [#feature - 3]
+    ratio_list = []
+    for i, diff in enumerate(diff_list[1:], start=1):
+        avg_index = [i for i in range(max(0, i-AVG_NUM), i)]
+        diff_avg = sum(diff_list[avg_index]) / len(avg_index)
+        ratio = diff / diff_avg
+        ratio_list.append(ratio)
+    
+    max_ratio = max(ratio_list)
+    max_ratio_idx = ratio_list.index(max_ratio)
 
-        # acceleration_rev = acceleration[::-1]
-        # print 'acceleration:',acceleration
+    # to find the 'target'(not always max) difference idx, plus one to max ratio idx
+    target_diff_idx = max_ratio_idx + 1
+    target_diff = diff_list[target_diff_idx]
 
-        if len(acceleration) < 2:
-            return [0] * len(feature_list)
-        avg_diff = sum(acceleration) / float(len(acceleration))
-        tmp = acceleration[0]
+    # by distance[dist_idx] and distance[dist_idx+1], we get difference[dist_idx(=diff_idx)]
+    # and we should take previous one(distance[dist_idx]) as threshold, so we choose thres_dist_idx = target_diff_idx.
+    thres_dist_idx = target_diff_idx
+    thres_dist = dist_list[thres_dist_idx]
 
-        avg_list = [x for x in acceleration if x > avg_diff]
-        avg_diff = sum(avg_list) / float(len(avg_list))
+    # plot difference bar chart
+    if do_draw:
+        plt.bar(x=range(len(diff_list)), height=diff_list)
+        plt.title(f'{feature_type.capitalize()} cut idx: {target_diff_idx} | value: {target_diff:.3f} | ratio: {max_ratio:.3f}')
+        save_path = f'{drawer.output_path}{drawer.img_name}_f_{edge_type}({feature_type})_hist.png'
+        plt.savefig(save_path)
+        plt.close()
 
-        '''
-        5 Changeable, compute a ratio as a reference which decide the max_cut_distance (dynamic).
-        Which the ratio is (its' own distance of group distance ) / (5 previous (if it exists ) distance of group distance average. )
-        '''
-        off_set = 5
-
-        rario = []
-        cut_point_list = []
-        for i in range(1, len(acceleration)):
-
-            if acceleration[i] > avg_diff:
-                # cut_point_list.append( [ i, acceleration[i]/(tmp/float(i) ) ] )
-
-                tmp_offset_prev = off_set
-                prev = i - off_set
-                if prev < 0:
-                    prev = 0
-                    tmp_offset_prev = i - prev
-                rario.append(acceleration[i] / (sum(acceleration[prev:i]) / float(tmp_offset_prev)))
-                cut_point_list.append([i, acceleration[i] / (sum(acceleration[prev:i]) / float(tmp_offset_prev))])
-                # cut_point_list.append( [ i, acceleration[i] ] )
-                # print 'i:',i+1,' ratio:',acceleration[i]/( sum(acceleration[n:i]) / float(off_set) )
-
-            tmp += acceleration[i]
-
-        if len(cut_point_list) < 1:
-            print('all in one group!')
-            return [0] * len(feature_list)
-
-        cut_point_list.sort(key=lambda x: x[1], reverse=True)
-
-        # print 'cut index:',cut_point_list[0][0]+1,' diff len:',len(acceleration)
-        max_cut_distance = last[cut_point_list[0][0]]
-        max_ratio = cut_point_list[0][1]
-
-        if max_ratio < 2.0:
-            print('all in one group! max_ratio:', max_ratio)
-            return [0] * len(feature_list)
-
-            # max_cut_distance = last[acceleration.argmax()]
-    # elif cut_method == 'inconsistency':
-
-    # plt.bar(left=range(len(rario)),height=rario)
-    plt.bar(x=range(len(acceleration)), height=acceleration)
-    plt.title(para + ' cut_point : ' + str(cut_point_list[0][0] + 1) + '  | value: ' + str(
-        acceleration[cut_point_list[0][0]]) + ' | ratio: ' + str(max_ratio))
-
-    # TODO fix do_draw
-    if do_draw and False:
-        plt.savefig(output_path + img_name + '_f_para[' + para + ']_his[' + str(edge_type) + '].png')
-    plt.close()
-
-    # print 'acceleration.argmax():',acceleration.argmax()
-    clusters = fcluster(cnt_hierarchy, max_cut_distance, criterion='distance')
-    print('----------------------------------')
+    clusters = fcluster(feature_dist_hierarchy, thres_dist, criterion='distance')
     return clusters
