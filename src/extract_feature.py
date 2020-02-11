@@ -43,7 +43,7 @@ def get_contour_feature(color_img, contours, edge_type):
 
     most_cnt_len = len(contours[int(len(contours) * 0.8)])      # 248
     sample_number = min(factor_360, key=lambda factor: abs(factor - most_cnt_len))   # 360
-
+    
     for contour in tqdm(contours, desc=f'[{edge_type}] Feature Extraction'):
         pixel_features = []
         cM = get_centroid(contour)

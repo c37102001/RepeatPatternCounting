@@ -57,7 +57,8 @@ for i, img_path in enumerate(tqdm(IMG_LIST)):
         img_path = TEST_IMG
         if i > 0:
             break
-
+    
+    #============================ Preprocess =================================================
     # check format
     img_name, img_ext = img_path.rsplit('.', 1)     # 'IMG_ (33),  jpg
     if img_ext not in ['jpg', 'png', 'jpeg']:
@@ -75,12 +76,14 @@ for i, img_path in enumerate(tqdm(IMG_LIST)):
     if DRAW_PROCESS:
         cv2.imwrite(output_dir + img_name + '_a_original_image.jpg', resi_input_img)
 
-    final_differ_edge_group = []    # combine edge detection result
+
+    #=================== Get grouped contours of every edge image ============================
+    edge_group_list = []    # combine edge detection result
     if _use_canny_edge:
         canny_edge = canny_edge_detect(img)
         canny_group = get_edge_group(drawer, canny_edge, edge_type='Canny', do_enhance=False, do_draw=DRAW_PROCESS)
         for edge_group in canny_group:
-            final_differ_edge_group.append(edge_group)
+            edge_group_list.append(edge_group)
     
     edge_imgs = []
     if _use_structure_edge:
@@ -103,11 +106,10 @@ for i, img_path in enumerate(tqdm(IMG_LIST)):
         for keep in KEEP_OVERLAP:
             edge_group = get_edge_group(drawer, edge_img, edge_type, keep=keep, do_draw=DRAW_PROCESS)
             for g in edge_group:
-                final_differ_edge_group.append(g)
+                edge_group_list.append(g)
 
-    #=============================================================================
+    #================================ Combine ====================================
 
-    # combine
     if DO_COMBINE:
         strct_edge_path = strct_edge_dir + img_name + '_edge.jpg'
         hed_edge_path = hed_edge_dir + img_name + '_hed.png'
@@ -121,41 +123,58 @@ for i, img_path in enumerate(tqdm(IMG_LIST)):
             for keep in KEEP_OVERLAP:
                 edge_group = get_edge_group(drawer, edge, 'Combine', keep=keep, do_draw=DRAW_PROCESS)
             for g in edge_group:
-                final_differ_edge_group.append(g)
+                edge_group_list.append(g)
         else:
             print('[Error] Lack of edge images for combine')
 
     #=============================================================================
 
-    # check two edge contour overlap
-    compare_overlap_queue = []
-    total_group_number = len(final_differ_edge_group)
-
-    for group_index in range(total_group_number):
-        cnt_group = final_differ_edge_group[group_index]['group_dic']
-
-        for cnt_dic in cnt_group:
-            compare_overlap_queue.append(
-                {'cnt': cnt_dic['cnt'], 'label': group_index, 'group_weight': len(cnt_group), 'cnt_dic': cnt_dic})
-
-    _label = [x['label'] for x in compare_overlap_queue]
-    print('label_dic:', [(y, _label.count(y)) for y in set(_label)])
-
-    compare_overlap_queue = check_overlap(compare_overlap_queue, keep='group_weight')
-
+    '''
+    edge_group_list: (list of list of dict), sized [# of total groups, # of cnts in this group (every cnt is a dict)]
+    edge_group_list[0][0] = {
+        'cnt': contours[i],
+        'shape': cnt_pixel_distances[i],
+        'color': cnt_avg_lab[i],
+        'size': cnt_norm_size[i],
+        'color_gradient': cnt_color_gradient[i]
+    }
+    '''
     
-    # drawer.reset()
-    img = drawer.blank_img()
-    _label = [x['label'] for x in compare_overlap_queue]
-    print('label_dic:', [(y, _label.count(y)) for y in set(_label)])
+    # check two edge contour overlap
+    total_group_number = len(edge_group_list)
+    cnt_dict_list = []
+    for i, group in enumerate(edge_group_list):
+        for cnt_dic in group:
+            cnt_dict_list.append({
+                'cnt': cnt_dic['cnt'], 
+                'label': i, 
+                'group_weight': len(group), 
+                'cnt_dic': cnt_dic
+            })
+
+    cnt_labels = [cnt_dict['label'] for cnt_dict in cnt_dict_list]
+    print('(label, counts): ', [(label, cnt_labels.count(label)) for label in set(cnt_labels)])
+
+    cnt_dict_list = check_overlap(cnt_dict_list)
+    cnt_labels = [cnt_dict['label'] for cnt_dict in cnt_dict_list]
+    print('(label, counts): ', [(label, cnt_labels.count(label)) for label in set(cnt_labels)])
+
+    if DRAW_PROCESS:
+        img = drawer.blank_img()
+        for label in set(cnt_labels):
+            cnts = [cnt_dict['cnt'] for cnt_dict in cnt_dict_list if cnt_dict['label'] == label]
+            img = drawer.draw_one_color(cnts, img)
+        drawer.save(img, 'g_OriginalResult_RemoveOvlp')
+
+    # =================== edit to here ============================
 
     final_group = []
-
+    img = drawer.blank_img()
     for label_i in range(total_group_number):
         tmp_group = []
-        for i in range(len(compare_overlap_queue)):
-            if compare_overlap_queue[i]['label'] == label_i:
-                tmp_group.append(compare_overlap_queue[i]['cnt_dic'])
+        for i in range(len(cnt_dict_list)):
+            if cnt_dict_list[i]['label'] == label_i:
+                tmp_group.append(cnt_dict_list[i]['cnt_dic'])
 
         if len(tmp_group) < 1:
             continue
@@ -180,7 +199,7 @@ for i, img_path in enumerate(tqdm(IMG_LIST)):
 
         if len(tmp_cnt_group) < 2:
             continue
-        # drawer.draw(np.array(tmp_cnt_group))
+
         img = drawer.draw_one_color(np.array(tmp_cnt_group), img)
 
         final_group.append({'cnt': tmp_cnt_group, 'avg_area': avg_area, 'cover_area': cnt_area,
@@ -189,7 +208,6 @@ for i, img_path in enumerate(tqdm(IMG_LIST)):
 
     if DRAW_PROCESS:
         desc = 'g_RemoveOverlapCombineCnt'
-        # drawer.save(desc)
         drawer.save(img, desc)
 
     # line 637 - line 712 obviousity filter
@@ -275,14 +293,14 @@ for i, img_path in enumerate(tqdm(IMG_LIST)):
     # end choose obvious way if
 
     final_nonoverlap_cnt_group = []
-    compare_overlap_queue = []
+    cnt_dict_list = []
     total_group_number = len(final_obvious_group)
     # get all group cnt and filter overlap
     for group_index in range(total_group_number):
         cnt_group = final_obvious_group[group_index]['group_dic']
 
         for cnt_dic in cnt_group:
-            compare_overlap_queue.append(
+            cnt_dict_list.append(
                 {'cnt': cnt_dic['cnt'], 'label': group_index, 'group_weight': len(cnt_group),
                     'color': cnt_dic['color']})
 
@@ -291,7 +309,7 @@ for i, img_path in enumerate(tqdm(IMG_LIST)):
         avg_color = [0, 0, 0]
         avg_edge_number = 0
         avg_size = 0
-        for cnt_dic in compare_overlap_queue:
+        for cnt_dic in cnt_dict_list:
             if cnt_dic['label'] == label_i:
                 tmp_group.append(cnt_dic['cnt'])
                 '''10 Changeable'''
@@ -305,7 +323,7 @@ for i, img_path in enumerate(tqdm(IMG_LIST)):
 
                 avg_size += cv2.contourArea(cnt_dic['cnt'])
 
-        # end compare_overlap_queue for
+        # end cnt_dict_list for
         if len(tmp_group) < 1:
             continue
         count = len(tmp_group)

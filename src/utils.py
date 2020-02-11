@@ -19,18 +19,13 @@ def get_edge_group(drawer, edge_img, edge_type, keep='inner', do_enhance=True, d
         do_draw: (bool) whether draw process figures
     
     Returns:
-        grouped_cnt: (list of dict)
-        grouped_cnt[0] = {
-            'cnt': (list of ndarray) sized [num_of_cnts, num_of_pixels, 1, 2]
-            'obvious_weight': (int) (e.g. 0)
-            'group_dic': (list of dict)
-        }
-        grouped_cnt[0]['group_dic'] = {
-            'cnt': (ndarray) sized [num_of_pixels, 1, 2]
-            'shape': (list of float normalized to 0~1) len = shape_sample_num(90/180/360)
-            'color': (list of float) (e.g. [45.83, 129.31, 133.44]) len = 3
-            'size': (list of float) (e.g. [0.07953, ...])
-            'color_gradient': (float) (e.g. 64.5149)
+        grouped_cnt: (list of list of dict), sized [# of groups, # of cnts in this group (every cnt is a dict)]
+        grouped_cnt[0][0] = {
+            'cnt': contours[i],
+            'shape': cnt_pixel_distances[i],
+            'color': cnt_avg_lab[i],
+            'size': cnt_norm_size[i],
+            'color_gradient': cnt_color_gradient[i]
         }
     '''
     output_path = drawer.output_path
@@ -98,6 +93,38 @@ def get_edge_group(drawer, edge_img, edge_type, keep='inner', do_enhance=True, d
     return grouped_cnt
 
 
+def filter_contours(contours, re_height, re_width):
+    MIN_PERIMETER = 60
+    MAX_CNT_SIZE = 1 / 5
+    MIN_CNT_SIZE = 1 / 30000
+    SOLIDITY_THRE = 0.5
+    MAX_EDGE_NUM = 50
+    
+    accept_contours = []
+    for c in contours:
+        perimeter = len(c)
+        if perimeter < MIN_PERIMETER or perimeter > (re_height + re_width) * 2 / 3.0:
+            continue
+        
+        contour_area = cv2.contourArea(c)
+        if contour_area < (re_height * re_width) * MIN_CNT_SIZE or contour_area > (re_height * re_width) * MAX_CNT_SIZE:
+            continue
+
+        convex_area = cv2.contourArea(cv2.convexHull(c))
+        solidity = contour_area / convex_area
+        if solidity < SOLIDITY_THRE:
+            continue
+
+        epsilon = 0.01 * cv2.arcLength(c, closed=True)
+        edge_num = len(cv2.approxPolyDP(c, epsilon, closed=True))
+        if edge_num > MAX_EDGE_NUM:
+            continue
+
+        accept_contours.append(c)
+
+    return accept_contours
+
+
 def cluster_features(contours, cnt_feature_dic_list, feature_dic, drawer, edge_type, do_draw=False):
 
     feature_label = {}
@@ -133,52 +160,14 @@ def cluster_features(contours, cnt_feature_dic_list, feature_dic, drawer, edge_t
 
         label_idx = [idx for idx, label in enumerate(combine_labels) if label == combine_label]
         grouped_ft_dict_list = [cnt_feature_dic_list[i] for i in label_idx]
-        final_group.append({
-            'cnt': contours, 
-            'obvious_weight': 0,
-            'group_dic': grouped_ft_dict_list
-        })
+        final_group.append(grouped_ft_dict_list)
 
         # for do_draw
         cnts = [contours[i] for i in label_idx]
         img = drawer.draw_one_color(cnts, img)
         
-
     if do_draw:
         desc = 'g_OriginalResult_{}'.format(edge_type)
         drawer.save(img, desc)
     
     return final_group
-
-
-def filter_contours(contours, re_height, re_width):
-    MIN_PERIMETER = 60
-    MAX_CNT_SIZE = 1 / 5
-    MIN_CNT_SIZE = 1 / 30000
-    SOLIDITY_THRE = 0.5
-    MAX_EDGE_NUM = 50
-    
-    accept_contours = []
-    for c in contours:
-        perimeter = len(c)
-        if perimeter < MIN_PERIMETER or perimeter > (re_height + re_width) * 2 / 3.0:
-            continue
-        
-        contour_area = cv2.contourArea(c)
-        if contour_area < (re_height * re_width) * MIN_CNT_SIZE or contour_area > (re_height * re_width) * MAX_CNT_SIZE:
-            continue
-
-        convex_area = cv2.contourArea(cv2.convexHull(c))
-        solidity = contour_area / convex_area
-        if solidity < SOLIDITY_THRE:
-            continue
-
-        epsilon = 0.01 * cv2.arcLength(c, closed=True)
-        edge_num = len(cv2.approxPolyDP(c, epsilon, closed=True))
-        if edge_num > MAX_EDGE_NUM:
-            continue
-
-        accept_contours.append(c)
-
-    return accept_contours
-

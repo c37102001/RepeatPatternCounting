@@ -3,3 +3,4 @@ output/*
 output_hed/*
 output_hed_strct/*
 input/*
+src/test.py
