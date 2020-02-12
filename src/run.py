@@ -40,7 +40,6 @@ _use_hed_edge = True
 # ==========================================
 
 
-t_start_time = time.time()
 max_time_img = ''
 min_time_img = ''
 min_time = math.inf
@@ -51,7 +50,7 @@ evaluation_csv = [['Image name', 'TP', 'FP', 'FN', 'Precision', 'Recall', 'F_mea
 # TODO IMG_LIST, No contour assert
 # for i, img_name in enumerate(tqdm(os.listdir(input_dir))):
 for i, img_path in enumerate(tqdm(IMG_LIST)):
-    start_time = time.time()
+    start = time.time()
 
     if TEST:
         img_path = TEST_IMG
@@ -171,7 +170,6 @@ for i, img_path in enumerate(tqdm(IMG_LIST)):
             img = drawer.draw_same_color(cnts, img)
         drawer.save(img, 'g_RemoveOverlapCombineCnt')
 
-    # =================== edit to here ============================
     final_group = []
     for label in set(cnt_labels):
         group_cnt_dict_list = [cnt_dict for cnt_dict in cnt_dict_list if cnt_dict['label'] == label]
@@ -198,20 +196,16 @@ for i, img_path in enumerate(tqdm(IMG_LIST)):
         avg_shape_factor /= float(len(group_cnt_dict_list))
         avg_color_gradient /= float(len(group_cnt_dict_list))
 
-        
-        # cnt(group_cnt) = [cnt_dict['cnt'] for cnt_dict in group_cnt_dict_list]
         final_group.append({
-            'cnt': group_cnt, 
-            'cover_area': total_area,
+            'group_cnt': group_cnt,
+            'area': total_area,
             'color_gradient': avg_color_gradient, 
-            'shape_factor': avg_shape_factor,
-            'votes': 0, 
-            'group_cnt_dic': group_cnt_dict_list
+            'shape': avg_shape_factor,
+            'votes': 0,
         })
 
-
     # obviousity filter
-    obvious_list = ['cover_area', 'shape_factor', 'color_gradient']
+    obvious_list = ['area', 'shape', 'color_gradient']
     for obvious_para in obvious_list:
         final_group.sort(key=lambda x: x[obvious_para], reverse=False)
         para_list = [group[obvious_para] for group in final_group]
@@ -221,7 +215,7 @@ for i, img_path in enumerate(tqdm(IMG_LIST)):
         obvious_index = np.where(diff == max(diff))[0][0] + 1
 
         # check cover_area
-        if obvious_para == 'cover_area':
+        if obvious_para == 'area':
             obvious_area = para_list[obvious_index]
             for i in range(obvious_index-1, -1, -1):
                 area = para_list[i]
@@ -231,7 +225,7 @@ for i, img_path in enumerate(tqdm(IMG_LIST)):
                     obvious_index = i
         
         # check shape factor
-        elif obvious_para == 'shape_factor':
+        elif obvious_para == 'shape':
             obvious_shape_factor = para_list[obvious_index]
             for i, shape_factor in enumerate(para_list[:obvious_index]):
                 # include cnt with shape factor close to obvious shape factor
@@ -259,15 +253,14 @@ for i, img_path in enumerate(tqdm(IMG_LIST)):
         if DRAW_PROCESS:
             img = drawer.blank_img()
             for group in final_group[obvious_index:]:
-                img = drawer.draw_same_color(group['cnt'], img, color=(0, 255, 0))  # green for obvious
+                img = drawer.draw_same_color(group['group_cnt'], img, color=(0, 255, 0))  # green for obvious
             for group in final_group[:obvious_index]:
-                img = drawer.draw_same_color(group['cnt'], img, color=(0, 0, 255))  # red for others
+                img = drawer.draw_same_color(group['group_cnt'], img, color=(0, 0, 255))  # red for others
             drawer.save(img, desc=f'h_Obvious{obvious_para.capitalize()}')
 
             plt.bar(x=range(len(para_list)), height=para_list)
-            title = f'{obvious_para} cut idx: {obvious_index} | value: {para_list[obvious_index]}'
-            plt.title(title)
-            plt.savefig(output_dir + img_name + '_h_para[' + obvious_para + ']_obvious_his.png')
+            plt.title(f'{obvious_para} cut idx: {obvious_index} | value: {para_list[obvious_index]}')
+            plt.savefig(f'{output_dir}{img_name}_h_Obvious{obvious_para.capitalize()}_hist.png')
             plt.close()
         
 
@@ -276,93 +269,37 @@ for i, img_path in enumerate(tqdm(IMG_LIST)):
     max_weight = final_group[0]['votes']
 
     for group in final_group:
-        # determine obvious if match more than two obvious condition
         # TODO can further specify accept 2 when the loss weight is from color
         if group['votes'] >= min(2, max_weight):
             obvious_group.append(group)
+
+    # contours with same label
+    group_cnt = [group['group_cnt'] for group in obvious_group]
     
-
-    final_nonoverlap_cnt_group = []
-    cnt_dict_list = []
-    total_group_number = len(obvious_group)
-    # get all group cnt and filter overlap
-    for group_index in range(total_group_number):
-        cnt_group = obvious_group[group_index]['group_cnt_dic']
-
-        for cnt_dict in cnt_group:
-            cnt_dict_list.append(
-                {'cnt': cnt_dict['cnt'], 'label': group_index, 'group_weight': len(cnt_group),
-                    'color': cnt_dict['color']})
-
-    for label_i in range(total_group_number):
-        tmp_group = []
-        avg_color = [0, 0, 0]
-        avg_edge_number = 0
-        avg_size = 0
-        for cnt_dict in cnt_dict_list:
-            if cnt_dict['label'] == label_i:
-                tmp_group.append(cnt_dict['cnt'])
-                '''10 Changeable'''
-                approx = cv2.approxPolyDP(cnt_dict['cnt'], 10, True)
-                factor = 4 * np.pi * cv2.contourArea(cnt_dict['cnt']) / float(pow(len(cnt_dict['cnt']), 2))
-                if factor < 0.9:
-                    avg_edge_number += len(approx)
-
-                for i in range(3):
-                    avg_color[i] += cnt_dict['color'][i]
-
-                avg_size += cv2.contourArea(cnt_dict['cnt'])
-
-        # end cnt_dict_list for
-        if len(tmp_group) < 1:
-            continue
-        count = len(tmp_group)
-        avg_edge_number /= count
-        avg_size /= count
-        for i in range(3):
-            avg_color[i] /= count
-
-        final_nonoverlap_cnt_group.append(
-            {'cnt': tmp_group, 'edge_number': avg_edge_number, 'color': avg_color, 'size': avg_size,
-                'count': count})
-
-    # end each label make group for
-
     # draw final result
-    final_group_cnt = []
     img = resi_input_img / 3.0    # darken the image to make the contour visible
-    # sort list from little to large
-    final_nonoverlap_cnt_group.sort(key=lambda x: len(x['cnt']), reverse=False)
+    for cnts in group_cnt:
+        img = drawer.draw_same_color(cnts, img)
+    img = cv2.resize(img, (0, 0), fx=1/resize_factor, fy=1/resize_factor)
+    img = np.concatenate((input_img, img), axis=1)
+    drawer.save(img, 'l_FinalResult')
 
-    for tmp_group in final_nonoverlap_cnt_group:
+    spent_time = time.time() - start
+    print(f'Finished in {spent_time} s')
 
-        if len(tmp_group) < 2:
-            continue
-
-        final_group_cnt.append(tmp_group['cnt'])
-        img = drawer.draw_same_color(tmp_group['cnt'], img)
+    print('-----------------------------------------------------------')
+    if spent_time > max_time:
+        max_time = spent_time
+        max_time_img = img_name
+    if spent_time < min_time:
+        min_time = spent_time
+        min_time_img = img_name
 
     if _evaluate:
         resize_ratio = resize_height / float(img_height)
-        tp, fp, fn, pr, re, fm, er = evaluate_detection_performance(img, img_name, final_group_cnt,
+        tp, fp, fn, pr, re, fm, er = evaluate_detection_performance(img, img_name, group_cnt,
                                                                     resize_ratio, evaluate_csv_path)
         evaluation_csv.append([img_name, tp, fp, fn, pr, re, fm, er])
-
-    contour_image = cv2.resize(img, (0, 0), fx=1/resize_factor, fy=1/resize_factor)
-    combine_image = np.concatenate((input_img, contour_image), axis=1)
-
-    cv2.imwrite(output_dir + img_name + '_l_FinalResult.jpg', combine_image)
-
-    print('Finished in ', time.time() - start_time, ' s')
-
-    print('-----------------------------------------------------------')
-    each_img_time = time.time() - start_time
-    if each_img_time > max_time:
-        max_time = each_img_time
-        max_time_img = img_name
-    if each_img_time < min_time:
-        min_time = each_img_time
-        min_time_img = img_name
 
 
 if _evaluate:
@@ -373,5 +310,4 @@ if _evaluate:
 
 print('img:', max_time_img, ' max_time:', max_time, 's')
 print('img:', min_time_img, 'min_time:', min_time, 's')
-print('All finished in ', time.time() - t_start_time, ' s')
 
