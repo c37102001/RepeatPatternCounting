@@ -12,7 +12,7 @@ from tqdm import tqdm
 from canny import canny_edge_detect
 from contour_drawer import ContourDrawer
 from utils import get_edge_group
-from misc import check_overlap, avg_img_gradient, evaluate_detection_performance
+from misc import check_overlap, count_avg_gradient, evaluate_detection_performance
 
 
 resize_height = 736.0       # 736 will make the colony perfomance the best. (ref to yun-tao colony)
@@ -78,12 +78,12 @@ for i, img_path in enumerate(tqdm(IMG_LIST)):
 
 
     #=================== Get grouped contours of every edge image ============================
-    edge_group_list = []    # combine edge detection result
+    group_cnt_dict_list = []    # combine edge detection result
     if _use_canny_edge:
         canny_edge = canny_edge_detect(img)
         canny_group = get_edge_group(drawer, canny_edge, edge_type='Canny', do_enhance=False, do_draw=DRAW_PROCESS)
         for edge_group in canny_group:
-            edge_group_list.append(edge_group)
+            group_cnt_dict_list.append(edge_group)
     
     edge_imgs = []
     if _use_structure_edge:
@@ -106,7 +106,7 @@ for i, img_path in enumerate(tqdm(IMG_LIST)):
         for keep in KEEP_OVERLAP:
             edge_group = get_edge_group(drawer, edge_img, edge_type, keep=keep, do_draw=DRAW_PROCESS)
             for g in edge_group:
-                edge_group_list.append(g)
+                group_cnt_dict_list.append(g)
 
     #================================ Combine ====================================
 
@@ -123,39 +123,46 @@ for i, img_path in enumerate(tqdm(IMG_LIST)):
             for keep in KEEP_OVERLAP:
                 edge_group = get_edge_group(drawer, edge, 'Combine', keep=keep, do_draw=DRAW_PROCESS)
             for g in edge_group:
-                edge_group_list.append(g)
+                group_cnt_dict_list.append(g)
         else:
             print('[Error] Lack of edge images for combine')
 
     #=============================================================================
 
     '''
-    edge_group_list: (list of list of dict), sized [# of total groups, # of cnts in this group (every cnt is a dict)]
-    edge_group_list[0][0] = {
+    group_cnt_dict_list: (list of list of dict), sized [#total groups, #cnts in group (every cnt is a dict)]
+    group_cnt_dict_list[0][0] = {
         'cnt': contours[i],
         'shape': cnt_pixel_distances[i],
         'color': cnt_avg_lab[i],
         'size': cnt_norm_size[i],
         'color_gradient': cnt_color_gradient[i]
+
+        # keys added below
+        'label': i,
+        'group_weight': len(group_cnt_dict)
     }
     '''
     
-    # check two edge contour overlap
-    total_group_number = len(edge_group_list)
-    cnt_dict_list = []
-    for i, group in enumerate(edge_group_list):
-        for cnt_dic in group:
-            cnt_dict_list.append({
-                'cnt': cnt_dic['cnt'], 
-                'label': i, 
-                'group_weight': len(group), 
-                'cnt_dic': cnt_dic
-            })
+    # check two contour overlap
+    total_group_number = len(group_cnt_dict_list)
 
+    # TODO group_cnt_dict_list and cnt_dict_list is redundant
+    # add label and group weight(num of cnts in the group) to contour dictionary
+    for i, group_cnt_dict in enumerate(group_cnt_dict_list):
+        for cnt_dict in group_cnt_dict:
+            cnt_dict['label'] = i
+            cnt_dict['group_weight'] = len(group_cnt_dict)
+
+    # flatten to a list of contour dict
+    cnt_dict_list = [cnt_dict for group_cnt_dict in group_cnt_dict_list for cnt_dict in group_cnt_dict]
+    # show original labels and counts
     cnt_labels = [cnt_dict['label'] for cnt_dict in cnt_dict_list]
     print('(label, counts): ', [(label, cnt_labels.count(label)) for label in set(cnt_labels)])
 
+    # check overlapped cnts and change their labels or remove them
     cnt_dict_list = check_overlap(cnt_dict_list)
+    # show labels and counts after removed overlapped cnts
     cnt_labels = [cnt_dict['label'] for cnt_dict in cnt_dict_list]
     print('(label, counts): ', [(label, cnt_labels.count(label)) for label in set(cnt_labels)])
 
@@ -164,64 +171,59 @@ for i, img_path in enumerate(tqdm(IMG_LIST)):
         for label in set(cnt_labels):
             cnts = [cnt_dict['cnt'] for cnt_dict in cnt_dict_list if cnt_dict['label'] == label]
             img = drawer.draw_one_color(cnts, img)
-        drawer.save(img, 'g_OriginalResult_RemoveOvlp')
+        drawer.save(img, 'g_RemoveOverlapCombineCnt')
 
     # =================== edit to here ============================
-
     final_group = []
-    img = drawer.blank_img()
-    for label_i in range(total_group_number):
-        tmp_group = []
-        for i in range(len(cnt_dict_list)):
-            if cnt_dict_list[i]['label'] == label_i:
-                tmp_group.append(cnt_dict_list[i]['cnt_dic'])
+    for label in set(cnt_labels):
+        group_cnt_dict_list = [cnt_dict for cnt_dict in cnt_dict_list if cnt_dict['label'] == label]
 
-        if len(tmp_group) < 1:
+        if len(group_cnt_dict_list) < 1:
             continue
 
-        tmp_cnt_group = []
+        group_cnt = []
         avg_color_gradient = 0.0
         avg_shape_factor = 0.0
-        cnt_area = 0.0
+        total_area = 0.0
 
         # for each final group count obvious factor
-        for cnt_dic in tmp_group:
-            cnt = cnt_dic['cnt']
-            tmp_area = cv2.contourArea(cnt)
-            cnt_area += tmp_area
-            avg_shape_factor += tmp_area / float(cv2.contourArea(cv2.convexHull(cnt)))
-            avg_color_gradient += cnt_dic['color_gradient']
-            tmp_cnt_group.append(cnt)
+        for cnt_dict in group_cnt_dict_list:
+            cnt = cnt_dict['cnt']
+            cnt_area = cv2.contourArea(cnt)
+            convex_area = cv2.contourArea(cv2.convexHull(cnt))
 
-        avg_shape_factor /= float(len(tmp_group))
-        avg_color_gradient /= float(len(tmp_group))
-        avg_area = cnt_area / float(len(tmp_group))
+            total_area += cnt_area
+            avg_shape_factor += cnt_area / convex_area
+            avg_color_gradient += cnt_dict['color_gradient']
+            group_cnt.append(cnt)
 
-        if len(tmp_cnt_group) < 2:
-            continue
+        avg_shape_factor /= float(len(group_cnt_dict_list))
+        avg_color_gradient /= float(len(group_cnt_dict_list))
 
-        img = drawer.draw_one_color(np.array(tmp_cnt_group), img)
+        
+        # cnt(group_cnt) = [cnt_dict['cnt'] for cnt_dict in group_cnt_dict_list]
+        final_group.append({
+            'cnt': group_cnt, 
+            'cover_area': total_area,
+            'color_gradient': avg_color_gradient, 
+            'shape_factor': avg_shape_factor,
+            'obvious_weight': 0, 
+            'group_cnt_dic': group_cnt_dict_list
+        })
 
-        final_group.append({'cnt': tmp_cnt_group, 'avg_area': avg_area, 'cover_area': cnt_area,
-                            'color_gradient': avg_color_gradient, 'shape_factor': avg_shape_factor,
-                            'obvious_weight': 0, 'group_dic': tmp_group})
 
-    if DRAW_PROCESS:
-        desc = 'g_RemoveOverlapCombineCnt'
-        drawer.save(img, desc)
-
-    # line 637 - line 712 obviousity filter
-    # contour_image = drawer.canvas
-    contour_image = img
+    # obviousity filter
+    contour_image = img         # contour_image = drawer.blank?
     obvious_list = ['cover_area', 'color_gradient', 'shape_factor']
     # sort final cnt group by cover_area , shape_factor and color_gradient
     for obvious_para in obvious_list:
 
         if obvious_para == 'color_gradient':
-            avg_gradient = avg_img_gradient(img)
+            avg_gradient = count_avg_gradient(resi_input_img)
             final_group.append({'cnt': [], 'cover_area': [], 'color_gradient': avg_gradient, 'shape_factor': [],
                                 'obvious_weight': -1})
 
+        # pdb()
         final_group.sort(key=lambda x: x[obvious_para], reverse=True)
         obvious_index = len(final_group) - 1
         max_diff = 0
@@ -297,31 +299,31 @@ for i, img_path in enumerate(tqdm(IMG_LIST)):
     total_group_number = len(final_obvious_group)
     # get all group cnt and filter overlap
     for group_index in range(total_group_number):
-        cnt_group = final_obvious_group[group_index]['group_dic']
+        cnt_group = final_obvious_group[group_index]['group_cnt_dic']
 
-        for cnt_dic in cnt_group:
+        for cnt_dict in cnt_group:
             cnt_dict_list.append(
-                {'cnt': cnt_dic['cnt'], 'label': group_index, 'group_weight': len(cnt_group),
-                    'color': cnt_dic['color']})
+                {'cnt': cnt_dict['cnt'], 'label': group_index, 'group_weight': len(cnt_group),
+                    'color': cnt_dict['color']})
 
     for label_i in range(total_group_number):
         tmp_group = []
         avg_color = [0, 0, 0]
         avg_edge_number = 0
         avg_size = 0
-        for cnt_dic in cnt_dict_list:
-            if cnt_dic['label'] == label_i:
-                tmp_group.append(cnt_dic['cnt'])
+        for cnt_dict in cnt_dict_list:
+            if cnt_dict['label'] == label_i:
+                tmp_group.append(cnt_dict['cnt'])
                 '''10 Changeable'''
-                approx = cv2.approxPolyDP(cnt_dic['cnt'], 10, True)
-                factor = 4 * np.pi * cv2.contourArea(cnt_dic['cnt']) / float(pow(len(cnt_dic['cnt']), 2))
+                approx = cv2.approxPolyDP(cnt_dict['cnt'], 10, True)
+                factor = 4 * np.pi * cv2.contourArea(cnt_dict['cnt']) / float(pow(len(cnt_dict['cnt']), 2))
                 if factor < 0.9:
                     avg_edge_number += len(approx)
 
                 for i in range(3):
-                    avg_color[i] += cnt_dic['color'][i]
+                    avg_color[i] += cnt_dict['color'][i]
 
-                avg_size += cv2.contourArea(cnt_dic['cnt'])
+                avg_size += cv2.contourArea(cnt_dict['cnt'])
 
         # end cnt_dict_list for
         if len(tmp_group) < 1:

@@ -96,43 +96,30 @@ def check_overlap(cnt_dict_list):
     return checked_list
 
 
-def avg_img_gradient(img, model='lab'):
-    '''
-    Count the average gardient of the whole image, in order to compare with
-    the color gradient obviousity.
-    There are two uses of the 'avg_gradient'.
-    1. Avoid that the image are only two color gradients, one of them will be deleted , even if they are close.
-    2. If all the color gradient are less than the avg_gradient, all of them will be discarded
-       since they are not obvious enough.
-    '''
+def count_avg_gradient(img, model='lab'):
+    # Count the average gardient of the whole image
 
+    height, width = img.shape[:2]
     kernel = np.array([[-1, -1, -1],
                        [-1, 8, -1],
                        [-1, -1, -1]])
 
     if model == 'lab':
-
-        height, width = img.shape[:2]
-        lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
-        lab_l = lab[:, :, 0]
+        lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB).astype(np.float32)    # different if not convert from uint8
+        lab_l = lab[:, :, 0]        # sized [736, *]
         lab_a = lab[:, :, 1]
         lab_b = lab[:, :, 2]
 
-        lab_list = [lab_l, lab_a, lab_b]
         gradient_list = []
-
-        for lab_channel in lab_list:
-            gradient = cv2.filter2D(lab_channel, -1, kernel)
-            gradient_list.append(gradient)
-
-        avg_gradient = 0.0
-        for x in range(height):
-            for y in range(width):
-                avg_gradient += math.sqrt(
-                    pow(gradient_list[0][x, y], 2) + pow(gradient_list[1][x, y], 2) + pow(gradient_list[2][x, y], 2))
-
-        avg_gradient /= (float(height) * float(width))
-
+        for lab_channel in [lab_l, lab_a, lab_b]:
+            gradient = cv2.filter2D(lab_channel, -1, kernel)    # sized [736, *]
+            gradient_list.append(gradient)                      # sized [3, 736, *]
+        
+        gradient_list = [g**2 for g in gradient_list]            # sized [3, 736, *]
+        gradient_list = sum(gradient_list)                      # sized [736, *]
+        gradient_list = np.sqrt(gradient_list)                  # sized [736, *]
+        avg_gradient = np.mean(gradient_list)                   # float, e.g. 30.926353
+        
     return avg_gradient
 
 def get_centroid(cnt):
