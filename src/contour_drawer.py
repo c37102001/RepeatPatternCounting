@@ -23,11 +23,15 @@ class ContourDrawer:
             cv2.drawContours(given_img, [c], -1, next(self.switchColor), 2)
         return given_img
     
-    def draw_one_color(self, contours, given_img=None):
+    def draw_same_color(self, contours, given_img=None, color=None):
         if given_img is None:
             given_img = self.blank_img()
-        given_img = cv2.drawContours(given_img, contours, -1, next(self.switchColor), 2)
+        if color is None:
+            color = next(self.switchColor)
+        given_img = cv2.drawContours(given_img, contours, -1, color, 2)
         return given_img
+
+    
 
     def save(self, img, desc):
         img_path = '{}{}_{}.jpg'.format(self.output_path, self.img_name, desc)

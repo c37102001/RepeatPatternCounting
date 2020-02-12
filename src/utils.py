@@ -70,12 +70,12 @@ def get_edge_group(drawer, edge_img, edge_type, keep='inner', do_enhance=True, d
     if not keep == 'all':
         contours, discard_contours = remove_overlap(contours, 'inner')
         if do_draw:
-            img = drawer.draw_one_color(contours)
-            img = drawer.draw_one_color(discard_contours, img)
+            img = drawer.draw_same_color(contours)
+            img = drawer.draw_same_color(discard_contours, img)
             desc = 'e2_Overlapped_{}'.format(edge_type)
             drawer.save(img, desc)
 
-            img = drawer.draw_one_color(contours)
+            img = drawer.draw_same_color(contours)
             desc = 'e2_RemovedOverlapped_{}'.format(edge_type)
             drawer.save(img, desc)
     
@@ -139,7 +139,7 @@ def cluster_features(contours, cnt_feature_dic_list, feature_dic, drawer, edge_t
             img = drawer.blank_img()
             for label in set(label_list):
                 grouped_cnts = [c for i, c in enumerate(contours) if label_list[i] == label]
-                img = drawer.draw_one_color(grouped_cnts, img)
+                img = drawer.draw_same_color(grouped_cnts, img)
             desc = 'f_Feature{}_{}'.format(feature_type.capitalize(), edge_type)
             drawer.save(img, desc)
 
@@ -164,7 +164,7 @@ def cluster_features(contours, cnt_feature_dic_list, feature_dic, drawer, edge_t
 
         # for do_draw
         cnts = [contours[i] for i in label_idx]
-        img = drawer.draw_one_color(cnts, img)
+        img = drawer.draw_same_color(cnts, img)
         
     if do_draw:
         desc = 'g_OriginalResult_{}'.format(edge_type)

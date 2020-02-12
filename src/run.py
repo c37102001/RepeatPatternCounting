@@ -145,8 +145,6 @@ for i, img_path in enumerate(tqdm(IMG_LIST)):
     '''
     
     # check two contour overlap
-    total_group_number = len(group_cnt_dict_list)
-
     # TODO group_cnt_dict_list and cnt_dict_list is redundant
     # add label and group weight(num of cnts in the group) to contour dictionary
     for i, group_cnt_dict in enumerate(group_cnt_dict_list):
@@ -170,7 +168,7 @@ for i, img_path in enumerate(tqdm(IMG_LIST)):
         img = drawer.blank_img()
         for label in set(cnt_labels):
             cnts = [cnt_dict['cnt'] for cnt_dict in cnt_dict_list if cnt_dict['label'] == label]
-            img = drawer.draw_one_color(cnts, img)
+            img = drawer.draw_same_color(cnts, img)
         drawer.save(img, 'g_RemoveOverlapCombineCnt')
 
     # =================== edit to here ============================
@@ -207,99 +205,89 @@ for i, img_path in enumerate(tqdm(IMG_LIST)):
             'cover_area': total_area,
             'color_gradient': avg_color_gradient, 
             'shape_factor': avg_shape_factor,
-            'obvious_weight': 0, 
+            'votes': 0, 
             'group_cnt_dic': group_cnt_dict_list
         })
 
 
     # obviousity filter
-    contour_image = img         # contour_image = drawer.blank?
-    obvious_list = ['cover_area', 'color_gradient', 'shape_factor']
-    # sort final cnt group by cover_area , shape_factor and color_gradient
+    obvious_list = ['cover_area', 'shape_factor', 'color_gradient']
     for obvious_para in obvious_list:
+        final_group.sort(key=lambda x: x[obvious_para], reverse=False)
+        para_list = [group[obvious_para] for group in final_group]
+        
+        # find obvious index
+        diff = np.diff(para_list)
+        obvious_index = np.where(diff == max(diff))[0][0] + 1
 
-        if obvious_para == 'color_gradient':
+        # check cover_area
+        if obvious_para == 'cover_area':
+            obvious_area = para_list[obvious_index]
+            for i in range(obvious_index-1, -1, -1):
+                area = para_list[i]
+                # include cnt with cover area close to obvious cover area
+                if area * 2 > obvious_area:
+                    obvious_area = area
+                    obvious_index = i
+        
+        # check shape factor
+        elif obvious_para == 'shape_factor':
+            obvious_shape_factor = para_list[obvious_index]
+            for i, shape_factor in enumerate(para_list[:obvious_index]):
+                # include cnt with shape factor close to obvious shape factor
+                if shape_factor > 0.8 * obvious_shape_factor:
+                    obvious_index = i
+                    break
+        
+        # check color_gradient
+        elif obvious_para == 'color_gradient':
+            # count whole image avg color gradient
             avg_gradient = count_avg_gradient(resi_input_img)
-            final_group.append({'cnt': [], 'cover_area': [], 'color_gradient': avg_gradient, 'shape_factor': [],
-                                'obvious_weight': -1})
+            # exclude obvious cnt with color gradient less than avg_gradient
+            for i in range(obvious_index, len(para_list)):
+                if para_list[i] < avg_gradient:
+                    obvious_index += 1
 
-        # pdb()
-        final_group.sort(key=lambda x: x[obvious_para], reverse=True)
-        obvious_index = len(final_group) - 1
-        max_diff = 0
-        area_list = [final_group[0][obvious_para]]
-
-        if obvious_para == 'color_gradient' and final_group[0]['obvious_weight'] < 0:
-            final_group.remove({'cnt': [], 'cover_area': [], 'color_gradient': avg_gradient, 'shape_factor': [],
-                                'obvious_weight': -1})
-            print('No color_gradient result')
-            continue
-
-        for i in range(1, len(final_group)):
-            area_list.append(final_group[i][obvious_para])
-            diff = final_group[i - 1][obvious_para] - final_group[i][obvious_para]
-
-            '''0.5 Changeable'''
-            if diff > max_diff:
-                if obvious_para == 'cover_area' and 0.5 * final_group[i - 1][obvious_para] < final_group[i][
-                    obvious_para]:
-                    continue
-
-                max_diff = diff
-                obvious_index = i - 1
-
-        print('obvious_index:', obvious_index)
-
-        for i in range(obvious_index + 1):
-            if final_group[i]['obvious_weight'] == -1:
-                obvious_index = i
-                break
-
-            final_group[i]['obvious_weight'] += 1
-            cv2.drawContours(contour_image, np.array(final_group[i]['cnt']), -1, (0, 255, 0), 2)    # GREEN
-
-        for i in range(obvious_index + 1, len(final_group)):
-            COLOR = (0, 0, 255) # RED
-            '''0.8 Changeable'''
-            if obvious_para == 'shape_factor' and final_group[i]['shape_factor'] >= 0.8:
-                COLOR = (0, 255, 0) # GREEN
-                final_group[i]['obvious_weight'] += 1
-            cv2.drawContours(contour_image, np.array(final_group[i]['cnt']), -1, COLOR, 2)
+            # skip if all color gradients are less tha avg_gradient
+            if obvious_index == len(para_list):
+                print('No color_gradient result')
+                continue
+        
+        for group in final_group[obvious_index:]:
+            group['votes'] += 1
 
         if DRAW_PROCESS:
-            cv2.imwrite(output_dir + img_name + '_h_para[' + obvious_para + ']_obvious(Green).jpg', contour_image)
+            img = drawer.blank_img()
+            for group in final_group[obvious_index:]:
+                img = drawer.draw_same_color(group['cnt'], img, color=(0, 255, 0))  # green for obvious
+            for group in final_group[:obvious_index]:
+                img = drawer.draw_same_color(group['cnt'], img, color=(0, 0, 255))  # red for others
+            drawer.save(img, desc=f'h_Obvious{obvious_para.capitalize()}')
 
-        plt.bar(x=range(len(area_list)), height=area_list)
-        plt.title(obvious_para + ' cut_point : ' + str(obvious_index) + '  | value: ' + str(
-            final_group[obvious_index][obvious_para]))
-
-        if DRAW_PROCESS:
+            plt.bar(x=range(len(para_list)), height=para_list)
+            title = f'{obvious_para} cut idx: {obvious_index} | value: {para_list[obvious_index]}'
+            plt.title(title)
             plt.savefig(output_dir + img_name + '_h_para[' + obvious_para + ']_obvious_his.png')
-        plt.close()
+            plt.close()
+        
 
-        if obvious_para == 'color_gradient':
-            final_group.remove({'cnt': [], 'cover_area': [], 'color_gradient': avg_gradient, 'shape_factor': [],
-                                'obvious_weight': -1})
+    obvious_group = []
+    final_group.sort(key=lambda x: x['votes'], reverse=True)
+    max_weight = final_group[0]['votes']
 
-    # end obvious para for
-    final_obvious_group = []
-    # "vote (0-3) " to decide which groups to remain
-    final_group.sort(key=lambda x: x['obvious_weight'], reverse=True)
-    weight = final_group[0]['obvious_weight']
-
-    for f_group in final_group:
-
+    for group in final_group:
         # determine obvious if match more than two obvious condition
-        if f_group['obvious_weight'] == weight:
-            final_obvious_group.append(f_group)
-    # end choose obvious way if
+        # TODO can further specify accept 2 when the loss weight is from color
+        if group['votes'] >= min(2, max_weight):
+            obvious_group.append(group)
+    
 
     final_nonoverlap_cnt_group = []
     cnt_dict_list = []
-    total_group_number = len(final_obvious_group)
+    total_group_number = len(obvious_group)
     # get all group cnt and filter overlap
     for group_index in range(total_group_number):
-        cnt_group = final_obvious_group[group_index]['group_cnt_dic']
+        cnt_group = obvious_group[group_index]['group_cnt_dic']
 
         for cnt_dict in cnt_group:
             cnt_dict_list.append(
@@ -352,7 +340,7 @@ for i, img_path in enumerate(tqdm(IMG_LIST)):
             continue
 
         final_group_cnt.append(tmp_group['cnt'])
-        img = drawer.draw_one_color(tmp_group['cnt'], img)
+        img = drawer.draw_same_color(tmp_group['cnt'], img)
 
     if _evaluate:
         resize_ratio = resize_height / float(img_height)
