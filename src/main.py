@@ -20,6 +20,7 @@ parser.add_argument('--img', type=str, help='img name with extention, like "IMG_
 parser.add_argument('--do_draw', action='store_true', help='draw all figures')
 args = parser.parse_args()
 test = args.test
+do_draw = args.do_draw
 
 cfg = ConfigParser()
 cfg.read('config.ini')
@@ -45,11 +46,8 @@ use_structure = img_cfg.getboolean('use_structure')
 use_hed = img_cfg.getboolean('use_hed')
 use_combine = img_cfg.getboolean('use_combine')
 keep_overlap = img_cfg['keep_overlap'].split(',')
-if not test:
-    do_draw = img_cfg.getboolean('do_draw')
-else:
-    do_draw = args.do_draw
 
+# evaluate config
 eval_cfg = cfg['evaluate']
 evaluate = eval_cfg.getboolean('evaluate')
 evaluation_csv = eval_cfg['evaluation_csv'].split(',')

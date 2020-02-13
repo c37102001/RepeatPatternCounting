@@ -6,18 +6,22 @@
 * put color imgs(det_imgs) in `input/image`
 * put structure forest edge imgs(det_edges) in `input/edge_image`
 * put HED edge imgs(hed_edges) in `input/hed_edge_image`
+* modify configs in `config.ini`
 
 ## How to run
 for old version
-1. `cd legacy_code`
-2. run `python find_repeat_pattern.py`
+* `cd legacy_code` and run `python find_repeat_pattern.py`
 
 for new version
-1. `cd src`
-2. run `python main.py`
-
+* `cd src`
+* if only test one picture:
+    1. run `python main.py --test --img "IMG_ (39).jpg"`
+    2. add `--do_draw` if want to draw all process pictures 
+* if test several pictures:
+    1. modify img_list in config.ini like `img_list = IMG_ (39).jpg, IMG_ (10).jpg, IMG_ (16).jpg`
+    2. run `python main.py`
+    3. add `--do_draw` if want to draw all process pictures 
 
 
 ## Result
-Test on [structure, edge, combine] x [inner, outer, all], and for now [inner, all] is better.
 ![img](./IMG_39_result.jpg)
