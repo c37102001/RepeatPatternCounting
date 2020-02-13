@@ -16,12 +16,13 @@ for new version
 * `cd src`
 * if only test one picture:
     1. run `python main.py --test --img "IMG_ (39).jpg"`
-    2. add `--do_draw` if want to draw all process pictures 
 * if test several pictures:
-    1. modify img_list in config.ini like `img_list = IMG_ (39).jpg, IMG_ (10).jpg, IMG_ (16).jpg`
+    1. modify `img_list` in config.ini like `img_list = IMG_ (39).jpg, IMG_ (10).jpg, IMG_ (16).jpg`
     2. run `python main.py`
-    3. add `--do_draw` if want to draw all process pictures 
-
+* if test all images in a folder:
+    1. modify `input_dir`, `strct_edge_dir` and `hed_edge_dir` in config.ini
+    2. run `python main.py --test_all`
+* add `--do_draw` if want to draw all process pictures 
 
 ## Result
 ![img](./IMG_39_result.jpg)

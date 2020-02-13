@@ -9,7 +9,7 @@ def hierarchical_clustering(feature_list, feature_type, edge_type, drawer, do_dr
     
     # hierarchically link features by order of distance(measured by 'ward'), output a hierarchical tree
     # return ndarray sized [#feature_list-1, 4], 4 means (group idx1, gp idx2, gp_distance, included ele num)
-    feature_dist_hierarchy = linkage(feature_list, 'ward')   
+    feature_dist_hierarchy = linkage(feature_list, 'ward')
 
     # distance between every two groups, sized [#feature - 1]
     dist_list = feature_dist_hierarchy[:, 2]
@@ -35,6 +35,9 @@ def hierarchical_clustering(feature_list, feature_type, edge_type, drawer, do_dr
     
     max_ratio = max(ratio_list)
     max_ratio_idx = ratio_list.index(max_ratio)
+    if max_ratio < 2.0:
+        print('all in one group! max_ratio:', max_ratio)
+        return [0] * len(feature_list)
 
     # to find the 'target'(not always max) difference idx, plus one to max ratio idx
     target_diff_idx = max_ratio_idx + 1

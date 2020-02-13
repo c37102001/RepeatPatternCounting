@@ -1,6 +1,7 @@
 import numpy as np
 import cv2
 import os
+import sys
 import math
 import time
 import csv
@@ -17,6 +18,7 @@ from utils import check_overlap, count_avg_gradient, evaluate_detection_performa
 parser = ArgumentParser()
 parser.add_argument('--test', action='store_true')
 parser.add_argument('--img', type=str, help='img name with extention, like "IMG_ (16).jpg"')
+parser.add_argument('--test_all', action='store_true')
 parser.add_argument('--do_draw', action='store_true', help='draw all figures')
 args = parser.parse_args()
 test = args.test
@@ -36,10 +38,13 @@ evaluate_csv_path = path_cfg['evaluate_csv_path']
 
 # image config
 img_cfg = cfg['img_cfg']
-if not test:
-    img_list = img_cfg['img_list'].split(',')
-else:
+if test:
     img_list = [args.img]
+elif args.test_all:
+    img_list = os.listdir(input_dir)
+else:
+    img_list = img_cfg['img_list'].split(',')
+
 resize_height = img_cfg.getfloat('resize_height')
 use_canny = img_cfg.getboolean('use_canny')
 use_structure = img_cfg.getboolean('use_structure')
@@ -53,8 +58,7 @@ evaluate = eval_cfg.getboolean('evaluate')
 evaluation_csv = eval_cfg['evaluation_csv'].split(',')
 
 
-# for i, img_name in enumerate(os.listdir(input_dir)):
-for i, img_path in enumerate(img_list):
+def main(i, img_path):
     img_path = img_path.strip()
     print(f'\n[Progress]: {i+1} / {len(img_list)}')
     start = time.time()
@@ -64,8 +68,8 @@ for i, img_path in enumerate(img_list):
     # check format
     img_name, img_ext = img_path.rsplit('.', 1)     # ['IMG_ (33)',  'jpg']
     if img_ext not in ['jpg', 'png', 'jpeg']:
-        print(f'[Error] Format not supported: {img_path}')
-        continue
+        raise FormatException(f'Format not supported: {img_path}')
+        # print(f'[Error] Format not supported: {img_path}')
 
     print('[Input] %s' % img_path)
     input_img = cv2.imread(input_dir + img_path)
@@ -156,6 +160,8 @@ for i, img_path in enumerate(img_list):
     group_dicts = []
     for label in set(labels):
         group_cnt_dicts = [cnt_dict for cnt_dict in cnt_dicts if cnt_dict['label'] == label]
+        if len(group_cnt_dicts) < 2:
+            continue
 
         group_cnts = []
         avg_color_gradient = 0.0
@@ -249,7 +255,6 @@ for i, img_path in enumerate(img_list):
         # TODO can further specify accept 2 when the loss weight is from color
         if group['votes'] >= min(2, most_votes):
             obvious_groups.append(group)
-    print(f'Total Groups: {len(obvious_groups)}')
 
     # contours with same label
     group_cnts = [group['group_cnts'] for group in obvious_groups]
@@ -262,8 +267,8 @@ for i, img_path in enumerate(img_list):
     img = np.concatenate((input_img, img), axis=1)
     drawer.save(img, 'l_FinalResult')
 
-    spent_time = time.time() - start
-    print(f'Finished in {spent_time} s')
+    print(f'Total Groups: {len(obvious_groups)} (cnt num: {[len(g["group_cnts"]) for g in obvious_groups]})')
+    print(f'Finished in {time.time() - start} s')
 
     print('-----------------------------------------------------------')
 
@@ -273,11 +278,13 @@ for i, img_path in enumerate(img_list):
                                                                     resize_ratio, evaluate_csv_path)
         evaluation_csv.append([img_name, tp, fp, fn, pr, re, fm, er])
 
-    if test:
-        break
 
-if evaluate:
-    f = open(evaluate_csv_path + 'evaluate-bean.csv', "wb")
-    w = csv.writer(f)
-    w.writerows(evaluation_csv)
-    f.close()
+for i, img_path in enumerate(img_list):
+    try:
+        main(i, img_path)
+    except KeyboardInterrupt:
+        break
+    except Exception:
+        type, message, traceback = sys.exc_info()
+        print(f'[{img_path}] Exception occurred: {message}')
+        continue
