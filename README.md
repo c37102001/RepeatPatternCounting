@@ -14,9 +14,10 @@ for old version
 
 for new version
 1. `cd src`
-2. run `python run.py`
+2. run `python main.py`
+
 
 
 ## Result
 Test on [structure, edge, combine] x [inner, outer, all], and for now [inner, all] is better.
-![img](./IMG_39.jpg)
+![img](./IMG_39_result.jpg)

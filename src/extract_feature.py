@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 import math
-from misc import get_centroid, eucl_distance
+from utils import get_centroid, eucl_distance
 from ipdb import set_trace as pdb
 from tqdm import tqdm
 
@@ -14,19 +14,13 @@ def get_contour_feature(color_img, contours, edge_type):
         contours: (list of ndarray), len = Num_of_cnts
         contours[0].shape = (Num_of_pixels, 1, 2)
     Returns:
-        cnt_feature_dic_list = [{
+        cnt_dic_list = [{
             'cnt': contours[i],
             'shape': cnt_pixel_distances[i],
             'color': cnt_avg_lab[i],
             'size': cnt_norm_size[i],
             'color_gradient': cnt_color_gradient[i]
         } for i in range(len(contours))]
-
-        feature_dic = {
-            'shape': cnt_pixel_distances,
-            'color': cnt_avg_lab,
-            'size': cnt_norm_size
-        }
     '''
     height, width, channel = color_img.shape
 
@@ -82,10 +76,10 @@ def get_contour_feature(color_img, contours, edge_type):
         cnt_color_gradient.append(color_gradient)
 
     max_size = len(max(contours, key=lambda x: len(x)))
-    cnt_avg_lab = [FindCntAvgLAB(contour, color_img) for contour in contours]
     cnt_norm_size = [[len(contour) / max_size] for contour in contours]
+    cnt_avg_lab = [FindCntAvgLAB(contour, color_img) for contour in contours]
 
-    cnt_feature_dic_list = [{
+    cnt_dic_list = [{
         'cnt': contours[i],
         'shape': cnt_pixel_distances[i],
         'color': cnt_avg_lab[i],
@@ -93,13 +87,7 @@ def get_contour_feature(color_img, contours, edge_type):
         'color_gradient': cnt_color_gradient[i]
     } for i in range(len(contours))]
 
-    feature_dic = {
-        'shape': cnt_pixel_distances,
-        'color': cnt_avg_lab,
-        'size': cnt_norm_size
-    }
-
-    return cnt_feature_dic_list, feature_dic
+    return cnt_dic_list
 
 
 def angle_between(vec1, vec2):
@@ -211,7 +199,6 @@ def sample_by_angle(img, pixel_features, n_sample):
             cnt_color_gradient += color_gradient_by_angle(img, inter_coordinate, inter_angle)
 
     cnt_color_gradient /= n_sample
-    # pdb()
     
     return pixel_distances, pixel_coordinates, cnt_color_gradient
 
@@ -289,28 +276,14 @@ def color_gradient_by_angle(img, coordinate, angle):
 
 def FindCntAvgLAB(cnt, img):
     mask = np.zeros(img.shape[:2], np.uint8)
-    mask[:] = 0
     cnt = cv2.convexHull(np.array(cnt))
     # Fill the contour in order to get the inner points
-    cv2.drawContours(mask, [cnt], -1, 255, -1)
+    cv2.drawContours(mask, [cnt], -1, 255, -1)      # thickness=-1: the contour interiors are drawn
     cv2.drawContours(mask, [cnt], -1, 0, 1)
 
     img_lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
-    # Get the lab value according to the coordinate of all points inside the contour
-    cnt_lab = img_lab[mask == 255]
-    num = len(cnt_lab)
-
-    if num < 1:
-        return [0.0, 0.0, 0.0]
-
-    avg_lab = [0.0, 0.0, 0.0]
-    for lab in cnt_lab:
-        avg_lab[0] += lab[0]
-        avg_lab[1] += lab[1]
-        avg_lab[2] += lab[2]
-
-    for i in range(len(avg_lab)):
-        avg_lab[i] /= float(num)
+    cnt_lab = img_lab[mask == 255]      # Get contour interiors lab value, sized [#interior pixels, 3]
+    avg_lab = np.mean(cnt_lab, axis=0)  # sized [3], e.g. [230.19, 125.96, 134.15]
 
     return avg_lab
 

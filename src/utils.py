@@ -1,173 +1,228 @@
-import cv2
 import numpy as np
-from misc import remove_overlap
-from clustering import hierarchical_clustering
-from extract_feature import get_contour_feature
+import cv2
+import math
 from ipdb import set_trace as pdb
-
-# Decide whether local/global equalization to use (True-->Local)
-_gray_value_redistribution_local = True
+import itertools
 
 
-def get_edge_group(drawer, edge_img, edge_type, keep='inner', do_enhance=True, do_draw=False):
-    ''' Do contour detection, filter contours, feature extract and cluster.
+def remove_overlap(contours, keep):
+    # sort from min to max
+    contours.sort(key=lambda x: len(x), reverse=False)
+    overlap_idx = []
 
-    Args:
-        edge_img: (ndarray) edge img element 0~255, sized [736, N]
-        edge_type: (str) edge type name
-        do_enhance: (bool) whether enhance edge img
-        do_draw: (bool) whether draw process figures
+    for i, cnt1 in enumerate(contours[:-1]):
+        for j, cnt2 in enumerate(contours[i+1: ], start=i+1):
+            if is_overlap(cnt1, cnt2):
+                if keep == 'inner':
+                    overlap_idx.append(j)
+                if keep == 'outer':
+                    overlap_idx.append(i)
+
+    # # old version (keep inner)
+    # for small_idx, (cnt1, cnt2) in enumerate(zip(contours[:-1], contours[1:])):
+    #     if is_overlap(cnt1, cnt2):
+    #         overlap_idx.append(small_idx + 1)
     
-    Returns:
-        grouped_cnt: (list of list of dict), sized [# of groups, # of cnts in this group (every cnt is a dict)]
-        grouped_cnt[0][0] = {
-            'cnt': contours[i],
-            'shape': cnt_pixel_distances[i],
-            'color': cnt_avg_lab[i],
-            'size': cnt_norm_size[i],
-            'color_gradient': cnt_color_gradient[i]
-        }
+    overlap_idx = list(set(overlap_idx))
+    keep_idx = [i for i in range(len(contours)) if i not in overlap_idx]
+    keep_contours = [contours[idx] for idx in keep_idx]
+    discard_contours = [contours[idx] for idx in overlap_idx]
+    
+    return keep_contours, discard_contours
+
+
+def is_overlap(cnt1, cnt2):
+    c1M = get_centroid(cnt1)
+    c2M = get_centroid(cnt2)
+    c1D = abs(cv2.pointPolygonTest(cnt1, c1M, True))
+    c2D = abs(cv2.pointPolygonTest(cnt2, c2M, True))
+    c1c2D = eucl_distance(c1M, c2M)
+
+    # check contains and similar size
+    if c1c2D < min(c1D, c2D) and min(c1D, c2D) / max(c1D, c2D) > (2 / 3):
+        return True
+    
+    return False
+
+def check_overlap(cnt_dicts):
+    label_change_list = []
+    # If 2 contours are overlapped, change the label of the less group to another label.
+    for i, dict_i in enumerate(cnt_dicts[:-1]):
+        for dict_j in cnt_dicts[i+1:]:
+
+            if is_overlap(dict_i['cnt'], dict_j['cnt']):
+                if dict_i['group_weight'] > dict_j['group_weight']:
+                    dict_j['group_weight'] = 0
+                    label_change_list.append((dict_j['label'], dict_i['label']))
+                else:
+                    dict_i['group_weight'] = 0
+                    label_change_list.append((dict_i['label'], dict_j['label']))
+    
+    # check if overlap contours are same contour , if true makes them same label
+    label_group_change = []
+    label_list = [x['label'] for x in cnt_dicts]
+    for (less_label, more_label) in set(label_change_list):
+        overlap_times = label_change_list.count((less_label, more_label))
+        less_weight = label_list.count(less_label)
+        if overlap_times >= 0.5 * less_weight:          # 0.5 Changeable
+            found = False
+            for label_group in label_group_change:
+                if less_label in label_group:
+                    found = True
+                    label_group.append(more_label)
+                if more_label in label_group:
+                    found = True
+                    label_group.insert(0, less_label)
+
+            if not found:
+                label_group_change.append([less_label, more_label])
+
+    label_change_dic = {}
+    for label_group in label_group_change:
+        most_label = label_group[-1]
+        for label in label_group:
+            label_change_dic[label] = most_label
+
+    checked_list = []
+    for cnt_dic in cnt_dicts:
+        if cnt_dic['group_weight'] > 0:
+            if cnt_dic['label'] in label_change_dic:
+                cnt_dic['label'] = label_change_dic[cnt_dic['label']]
+            checked_list.append(cnt_dic)
+
+    return checked_list
+
+
+def count_avg_gradient(img, model='lab'):
+    # Count the average gardient of the whole image
+
+    height, width = img.shape[:2]
+    kernel = np.array([[-1, -1, -1],
+                       [-1, 8, -1],
+                       [-1, -1, -1]])
+
+    if model == 'lab':
+        lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB).astype(np.float32)    # different if not convert from uint8
+        lab_l = lab[:, :, 0]        # sized [736, *]
+        lab_a = lab[:, :, 1]
+        lab_b = lab[:, :, 2]
+
+        gradient_list = []
+        for lab_channel in [lab_l, lab_a, lab_b]:
+            gradient = cv2.filter2D(lab_channel, -1, kernel)    # sized [736, *]
+            gradient_list.append(gradient)                      # sized [3, 736, *]
+        
+        gradient_list = [g**2 for g in gradient_list]            # sized [3, 736, *]
+        gradient_list = sum(gradient_list)                      # sized [736, *]
+        gradient_list = np.sqrt(gradient_list)                  # sized [736, *]
+        avg_gradient = np.mean(gradient_list)                   # float, e.g. 30.926353
+        
+    return avg_gradient
+
+def get_centroid(cnt):
+    M = cv2.moments(cnt)
+    cx = int(M['m10'] / M['m00'])
+    cy = int(M['m01'] / M['m00'])
+    return cx, cy
+
+def eucl_distance(a, b):
+    if type(a) != np.ndarray:
+        a = np.array(a)
+    if type(b) != np.ndarray:
+        b = np.array(b)
+
+    return np.linalg.norm(a - b)
+
+def evaluate_detection_performance(img, fileName, final_group_cnt, resize_ratio, evaluate_csv_path):
     '''
-    output_path = drawer.output_path
-    img_name = drawer.img_name
+    Evaluation during run time.
+    The evaluation is about if the contours are
+    detected correctly.
+    The results are compared with the groundtruth.
 
-    if do_draw:
-        img_path = '{}{}_b_OriginEdge{}.jpg'.format(output_path, img_name, edge_type)
-        cv2.imwrite(img_path, edge_img)
+    @param
+    evaluate_csv_path : read the groundtruth data
+    '''
 
-    if do_enhance:  
-        # Enhance edge
-        if _gray_value_redistribution_local:
-            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-            edge_img = clahe.apply(edge_img)
-        else:
-            edge_img = cv2.equalizeHist(edge_img) # golbal equalization
+    tp = 0
+    fp = 0
+    fn = 0
+    pr = 0.0
+    re = 0.0
+    # Mix the pr and re
+    fm = 0.0
+    # Only compare the count
+    er = 0.0
+    groundtruth_list = []
+    translate_list = [['Group', 'Y', 'X']]
+    with open(evaluate_csv_path + fileName + '.csv') as csvfile:
+        reader = csv.DictReader(csvfile)
+        for row in reader:
+            # groundtruth_list.append( { 'Group':int(row['Group']), 'X':int(int(row['X'])*resize_ratio), 'Y':int(int(row['Y'])*resize_ratio) } )
+            groundtruth_list.append({'Group': int(row['Group']), 'X': int(row['X']), 'Y': int(row['Y'])})
 
-        if do_draw:
-            cv2.imwrite(output_path + img_name + '_c_enhanced_edge[' + str(edge_type) + '].jpg', edge_img)
+    cnt_area_coordinate = Get_Cnt_Area_Coordinate(img, final_group_cnt)
+    cnt_area_coordinate.sort(key=lambda x: len(x), reverse=False)
 
-    '''find contours'''
-    # threshold to 0 or 255
-    edge_img = cv2.threshold(edge_img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
+    groundtruth_count = len(groundtruth_list)
+    program_count = len(cnt_area_coordinate)
 
-    # find closed contours, return (list of ndarray), len = Num_of_cnts, ele = (Num_of_pixels, 1, 2(x,y))
-    contours = cv2.findContours(edge_img, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)[-2]
+    # _________The 1st Evaluation and the preprocessing of the 2nd evaluation_____________________________
+    '''
+    @param
+    g_dic : the coordinate of one contour in the groundtruth list (g means groundtruth)
+    cnt_dic : one contour(all pixels' coordinate in a contour area) in the cnt_area_coordinate
+    cnt_area_coordinate : All contours that the program found in one image 
 
-    if do_draw:
-        img = drawer.draw(contours)
-        desc = 'd_OriginContour_{}'.format(edge_type)
-        drawer.save(img, desc)
-    
-    # filter contours by area, perimeter, solidity, edge_num
-    height, width = drawer.color_img.shape[:2]
-    contours = filter_contours(contours, height, width)
-    if do_draw:
-        img = drawer.draw(contours)
-        desc = 'e1_Filterd_{}'.format(edge_type)
-        drawer.save(img, desc)
-    
-    # remove outer overlap contour
-    if not keep == 'all':
-        contours, discard_contours = remove_overlap(contours, 'inner')
-        if do_draw:
-            img = drawer.draw_same_color(contours)
-            img = drawer.draw_same_color(discard_contours, img)
-            desc = 'e2_Overlapped_{}'.format(edge_type)
-            drawer.save(img, desc)
+    If g_dic is in cnt_dic (which means one of the groundtruth contours matches one of the contours that the program found),
+    save both label of cnt_dic and the coordinate of g_dic in the translate list.
+    '''
+    for g_dic in groundtruth_list:
+        for cnt_dic in cnt_area_coordinate:
+            if [int(g_dic['Y'] * resize_ratio), int(g_dic['X'] * resize_ratio)] in cnt_dic['coordinate']:
+                tp += 1
+                cnt_area_coordinate.remove(cnt_dic)
+                translate_list.append([cnt_dic['label'], g_dic['Y'], g_dic['X']])
+                break
 
-            img = drawer.draw_same_color(contours)
-            desc = 'e2_RemovedOverlapped_{}'.format(edge_type)
-            drawer.save(img, desc)
-    
-    # return if too less contours
-    if len(contours) <= 3:
-        print(f'[Warning] {edge_type} contours less than 3.')
-        return []
+    '''Make a csv that save the translate list.'''
+    f = open(csv_output + fileName[:-4] + '.csv', "wb")
+    w = csv.writer(f)
+    w.writerows(translate_list)
+    f.close()
 
-    # Extract contour color, size, shape, color_gradient features
-    cnt_feature_dic_list, feature_dic = get_contour_feature(drawer.color_img, contours, edge_type)
-    
-    # cluster feature into groups
-    grouped_cnt = cluster_features(contours, cnt_feature_dic_list, feature_dic, drawer, edge_type, do_draw)
-    
-    return grouped_cnt
+    fp = program_count - tp
+    fn = groundtruth_count - tp
 
+    if tp + fp > 0:
+        pr = tp / float(tp + fp)
+    if tp + fn > 0:
+        re = tp / float(tp + fn)
+    if pr + re > 0:
+        fm = 2 * pr * re / (pr + re)
+    if groundtruth_count > 0:
+        er = abs(program_count - groundtruth_count) / float(groundtruth_count)
+    print(program_count, groundtruth_count)
+    return tp, fp, fn, pr, re, fm, er
+    # _____________________1 st evaluation end__________________________________________________
 
-def filter_contours(contours, re_height, re_width):
-    MIN_PERIMETER = 60
-    MAX_CNT_SIZE = 1 / 5
-    MIN_CNT_SIZE = 1 / 30000
-    SOLIDITY_THRE = 0.5
-    MAX_EDGE_NUM = 50
-    
-    accept_contours = []
-    for c in contours:
-        perimeter = len(c)
-        if perimeter < MIN_PERIMETER or perimeter > (re_height + re_width) * 2 / 3.0:
-            continue
-        
-        contour_area = cv2.contourArea(c)
-        if contour_area < (re_height * re_width) * MIN_CNT_SIZE or contour_area > (re_height * re_width) * MAX_CNT_SIZE:
-            continue
+def Get_Cnt_Area_Coordinate(img, final_group_cnt):
+    '''
+    Take the contour list (in order) as input ,
+    output all the points within the contour.
+    In order to check if a point is contained in the contour.
+    '''
 
-        convex_area = cv2.contourArea(cv2.convexHull(c))
-        solidity = contour_area / convex_area
-        if solidity < SOLIDITY_THRE:
-            continue
+    cnt_area_coordinate = []
+    blank_img = np.zeros(img.shape[:2], np.uint8)
 
-        epsilon = 0.01 * cv2.arcLength(c, closed=True)
-        edge_num = len(cv2.approxPolyDP(c, epsilon, closed=True))
-        if edge_num > MAX_EDGE_NUM:
-            continue
+    for cnt_group in final_group_cnt:
+        for cnt in cnt_group:
+            blank_img[:] = 0
+            cv2.drawContours(blank_img, [cnt], -1, 255, -1)
+            # cv2.imshow('blank',blank_img)
+            # cv2.waitKey(0)
+            # use argwhere to find all coordinate which value == 1 ( cnt area )
+            cnt_area_coordinate.append((np.argwhere(blank_img == 255)).tolist())
 
-        accept_contours.append(c)
-
-    return accept_contours
-
-
-def cluster_features(contours, cnt_feature_dic_list, feature_dic, drawer, edge_type, do_draw=False):
-
-    feature_label = {}
-    # Respectively use shape, color, and size as feature set to cluster
-    for feature_type in ['size', 'shape', 'color']:
-        feature_list = feature_dic[feature_type]
-
-        # label_list = ndarray([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 3, 3, 3, 3, 3, 3, 3, 3, 2, 2, 2]), len=len(ft_list)
-        label_list = hierarchical_clustering(feature_list, feature_type, edge_type, drawer, do_draw)
-
-        if do_draw:
-            img = drawer.blank_img()
-            for label in set(label_list):
-                grouped_cnts = [c for i, c in enumerate(contours) if label_list[i] == label]
-                img = drawer.draw_same_color(grouped_cnts, img)
-            desc = 'f_Feature{}_{}'.format(feature_type.capitalize(), edge_type)
-            drawer.save(img, desc)
-
-        feature_label[feature_type] = label_list
-
-
-    # combine the label clustered by size, shape, and color. ex: (0,1,1), (2,0,1)
-    combine_labels = []
-    for size, shape, color in zip(feature_label['size'], feature_label['shape'], feature_label['color']):
-        combine_labels.append((size, shape, color))
-
-    # find the final group by the intersected label and draw
-    img = drawer.blank_img()
-    final_group = []
-    for combine_label in set(combine_labels):
-        if combine_labels.count(combine_label) < 2:
-            continue
-
-        label_idx = [idx for idx, label in enumerate(combine_labels) if label == combine_label]
-        grouped_ft_dict_list = [cnt_feature_dic_list[i] for i in label_idx]
-        final_group.append(grouped_ft_dict_list)
-
-        # for do_draw
-        cnts = [contours[i] for i in label_idx]
-        img = drawer.draw_same_color(cnts, img)
-        
-    if do_draw:
-        desc = 'g_OriginalResult_{}'.format(edge_type)
-        drawer.save(img, desc)
-    
-    return final_group
+    return cnt_area_coordinate
