@@ -10,8 +10,9 @@ class ContourDrawer:
         self.output_path = output_path
         self.img_name = img_name
         self.switchColor = cycle(
-            [(128, 255, 0), (255, 128, 255), (0, 255, 255), (255, 192, 128),
-             (128, 192, 64), (128, 255, 160), (128, 128, 128), (128, 0, 128)])
+            [(0, 255, 255), (128, 255, 255), (0, 0, 255), (0, 255, 0),
+             (0, 128, 0), (128, 128, 0), (255, 128, 0), (128, 255, 0)]
+        )
 
     def blank_img(self):
         return np.zeros(self.color_img.shape, np.uint8)

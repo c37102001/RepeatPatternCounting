@@ -3,7 +3,6 @@ from scipy.cluster.hierarchy import linkage, fcluster
 import matplotlib.pyplot as plt
 from ipdb import set_trace as pdb
 
-# if less than 3, better to count all_avg_diff as ratio diff threshold
 AVG_NUM = 5
 
 def hierarchical_clustering(feature_list, feature_type, edge_type, drawer, do_draw=False):
@@ -17,10 +16,18 @@ def hierarchical_clustering(feature_list, feature_type, edge_type, drawer, do_dr
 
     # difference of distance between previous one, sized [#feature - 2]
     diff_list = np.diff(dist_list)
+
+    # count avg for those who is larger than all_avg_diff as threshold
+    all_avg_diff = sum(diff_list) / len(diff_list)
+    larger_than_avgs_diffs = [diff for diff in diff_list if diff > all_avg_diff]
+    diff_threshold = sum(larger_than_avgs_diffs) / float(len(larger_than_avgs_diffs))
     
     # count differ ratio between previous AVG_NUM differs, sized [#feature - 3]
     ratio_list = []
     for i, diff in enumerate(diff_list[1:], start=1):
+        if diff < diff_threshold:         # skip if less than average ratio
+            ratio_list.append(0)
+            continue
         avg_index = [i for i in range(max(0, i-AVG_NUM), i)]
         diff_avg = sum(diff_list[avg_index]) / len(avg_index)
         ratio = diff / diff_avg if not diff_avg == 0 else 0

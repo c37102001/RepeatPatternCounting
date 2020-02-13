@@ -4,57 +4,63 @@ import os
 import math
 import time
 import csv
+from argparse import ArgumentParser
+from configparser import ConfigParser
 import matplotlib.pyplot as plt
 from ipdb import set_trace as pdb
-from tqdm import tqdm
 
 from canny import canny_edge_detect
 from drawer import ContourDrawer
 from get_group_cnts import get_group_cnts
 from utils import check_overlap, count_avg_gradient, evaluate_detection_performance
 
+parser = ArgumentParser()
+parser.add_argument('--test', action='store_true')
+parser.add_argument('--img', type=str, help='img name with extention, like "IMG_ (16).jpg"')
+parser.add_argument('--do_draw', action='store_true', help='draw all figures')
+args = parser.parse_args()
+test = args.test
 
-resize_height = 736.0       # 736 will make the colony perfomance the best. (ref to yun-tao colony)
-_enhance_edge = True
-_evaluate = False   # Decide if excecute 1st evalution
+cfg = ConfigParser()
+cfg.read('config.ini')
 
-input_dir = '../input/image/'
-strct_edge_dir = '../input/edge_image/'  # structure forest output
-hed_edge_dir = '../input/hed_edge_image/'  # hed edge
-csv_output = '../output_csv_6_8[combine_result_before_filter_obvious]/'
-evaluate_csv_path = '../evaluate_data/groundtruth_csv/generalize_csv/'
-IMG_LIST = ['IMG_ (39).jpg', 'IMG_ (10).jpg', 'IMG_ (16).jpg' ]
-TEST = False
+# path config
+path_cfg = cfg['path']
+input_dir = path_cfg['input_dir']
+output_dir = path_cfg['output_dir']
+strct_edge_dir = path_cfg['strct_edge_dir']
+hed_edge_dir = path_cfg['hed_edge_dir']
+csv_output = path_cfg['csv_output']
+evaluate_csv_path = path_cfg['evaluate_csv_path']
 
-# ================ CHANGABLE ===============
-DRAW_PROCESS = True
-TEST_IMG = 'IMG_ (39).jpg'
-KEEP_OVERLAP = ['inner']     # 'inner', 'outer', 'all'
-DO_COMBINE = False
+# image config
+img_cfg = cfg['img_cfg']
+if not test:
+    img_list = img_cfg['img_list'].split(',')
+else:
+    img_list = [args.img]
+resize_height = img_cfg.getfloat('resize_height')
+use_canny = img_cfg.getboolean('use_canny')
+use_structure = img_cfg.getboolean('use_structure')
+use_hed = img_cfg.getboolean('use_hed')
+use_combine = img_cfg.getboolean('use_combine')
+keep_overlap = img_cfg['keep_overlap'].split(',')
+if not test:
+    do_draw = img_cfg.getboolean('do_draw')
+else:
+    do_draw = args.do_draw
 
-output_dir = '../output/exp/'
-_use_canny_edge = False
-_use_structure_edge = True
-_use_hed_edge = True
-# ==========================================
+eval_cfg = cfg['evaluate']
+evaluate = eval_cfg.getboolean('evaluate')
+evaluation_csv = eval_cfg['evaluation_csv'].split(',')
 
 
-max_time_img = ''
-min_time_img = ''
-min_time = math.inf
-max_time = -math.inf
-evaluation_csv = [['Image name', 'TP', 'FP', 'FN', 'Precision', 'Recall', 'F_measure', 'Error_rate']]
-
-
-# TODO IMG_LIST, No contour assert
 # for i, img_name in enumerate(os.listdir(input_dir)):
-for i, img_path in enumerate(IMG_LIST):
-    print(f'\n[Progress]: {i+1} / {len(IMG_LIST)}')
+for i, img_path in enumerate(img_list):
+    img_path = img_path.strip()
+    print(f'\n[Progress]: {i+1} / {len(img_list)}')
     start = time.time()
 
-    if TEST:
-        img_path = TEST_IMG
-    
     #======================================== 0. Preprocess ==========================================
     
     # check format
@@ -71,24 +77,25 @@ for i, img_path in enumerate(IMG_LIST):
     resize_factor = resize_height / img_height
     resi_input_img = cv2.resize(input_img, (0, 0), fx=resize_factor, fy=resize_factor)
     drawer = ContourDrawer(resi_input_img, output_dir, img_name)
-    if DRAW_PROCESS:
+    if do_draw:
         cv2.imwrite(output_dir + img_name + '_a_original_image.jpg', resi_input_img)
 
 
     #===================================== 1. Get grouped contours  ===================================
     
     groups_cnt_dicts = []
-    if _use_canny_edge:
+    if use_canny:
         edge_img = canny_edge_detect(img)
-        _groups_cnt_dicts = get_group_cnts(drawer, canny_edge, edge_type='Canny', do_enhance=False, do_draw=DRAW_PROCESS)
-        groups_cnt_dicts.append(_groups_cnt_dicts)
+        for keep in keep_overlap:
+            _groups_cnt_dicts = get_group_cnts(drawer, edge_img, 'Canny', keep=keep, do_enhance=False, do_draw=do_draw)
+            groups_cnt_dicts.extend(_groups_cnt_dicts)
     
     edge_imgs = []
-    if _use_structure_edge:
+    if use_structure:
         edge_path = strct_edge_dir + img_name + '_edge.jpg'
         edge_type = 'Structure'
         edge_imgs.append((edge_path, edge_type))
-    if _use_hed_edge:
+    if use_hed:
         edge_path = hed_edge_dir + img_name + '_hed.png'
         edge_type = 'HED'
         edge_imgs.append((edge_path, edge_type))
@@ -101,11 +108,11 @@ for i, img_path in enumerate(IMG_LIST):
         edge_img = cv2.imread(edge_path, cv2.IMREAD_GRAYSCALE)
         edge_img = cv2.resize(edge_img, (0, 0), fx=resize_factor, fy=resize_factor)     # shape: (736, *)
 
-        for keep in KEEP_OVERLAP:
-            _groups_cnt_dicts = get_group_cnts(drawer, edge_img, edge_type, keep=keep, do_draw=DRAW_PROCESS)
+        for keep in keep_overlap:
+            _groups_cnt_dicts = get_group_cnts(drawer, edge_img, edge_type, keep=keep, do_draw=do_draw)
             groups_cnt_dicts.extend(_groups_cnt_dicts)
 
-    if DO_COMBINE:
+    if use_combine:
         strct_edge_path = strct_edge_dir + img_name + '_edge.jpg'
         hed_edge_path = hed_edge_dir + img_name + '_hed.png'
 
@@ -115,8 +122,8 @@ for i, img_path in enumerate(IMG_LIST):
             edge = (strct_edge + hed_edge)
             edge = cv2.resize(edge, (0, 0), fx=resize_height / img_height, fy=resize_height / img_height)
 
-            for keep in KEEP_OVERLAP:
-                _groups_cnt_dicts = get_group_cnts(drawer, edge, 'Combine', keep=keep, do_draw=DRAW_PROCESS)
+            for keep in keep_overlap:
+                _groups_cnt_dicts = get_group_cnts(drawer, edge, 'Combine', keep=keep, do_draw=do_draw)
                 groups_cnt_dicts.extend(_groups_cnt_dicts)
         else:
             print('[Error] Lack of edge images for combine')
@@ -139,7 +146,7 @@ for i, img_path in enumerate(IMG_LIST):
     labels = [cnt_dict['label'] for cnt_dict in cnt_dicts]  # show labels and counts after removed overlapped cnts
     print('after remove overlapped (label, counts): ', [(label, labels.count(label)) for label in set(labels)])
 
-    if DRAW_PROCESS:
+    if do_draw:
         img = drawer.blank_img()
         for label in set(labels):
             cnts = [cnt_dict['cnt'] for cnt_dict in cnt_dicts if cnt_dict['label'] == label]
@@ -222,7 +229,7 @@ for i, img_path in enumerate(IMG_LIST):
         for group in group_dicts[obvious_index:]:
             group['votes'] += 1
 
-        if DRAW_PROCESS:
+        if do_draw:
             img = drawer.blank_img()
             for group in group_dicts[obvious_index:]:
                 img = drawer.draw_same_color(group['group_cnts'], img, color=(0, 255, 0))  # green for obvious
@@ -235,18 +242,19 @@ for i, img_path in enumerate(IMG_LIST):
             plt.savefig(f'{output_dir}{img_name}_h_Obvious{factor.capitalize()}_hist.png')
             plt.close()
     
-    # ============================ Choose groups with most votes ==================================
+    # ============================ 5. Choose groups with most votes ==================================
 
-    obvious_group = []
+    obvious_groups = []
     most_votes_group = max(group_dicts, key=lambda x: x['votes'])
     most_votes = most_votes_group['votes']
     for group in group_dicts:
         # TODO can further specify accept 2 when the loss weight is from color
         if group['votes'] >= min(2, most_votes):
-            obvious_group.append(group)
+            obvious_groups.append(group)
+    print(f'Total Groups: {len(obvious_groups)}')
 
     # contours with same label
-    group_cnts = [group['group_cnts'] for group in obvious_group]
+    group_cnts = [group['group_cnts'] for group in obvious_groups]
     
     # draw final result
     img = resi_input_img / 3.0    # darken the image to make the contour visible
@@ -260,28 +268,18 @@ for i, img_path in enumerate(IMG_LIST):
     print(f'Finished in {spent_time} s')
 
     print('-----------------------------------------------------------')
-    if spent_time > max_time:
-        max_time = spent_time
-        max_time_img = img_name
-    if spent_time < min_time:
-        min_time = spent_time
-        min_time_img = img_name
 
-    if _evaluate:
+    if evaluate:
         resize_ratio = resize_height / float(img_height)
         tp, fp, fn, pr, re, fm, er = evaluate_detection_performance(img, img_name, group_cnts,
                                                                     resize_ratio, evaluate_csv_path)
         evaluation_csv.append([img_name, tp, fp, fn, pr, re, fm, er])
 
-    if TEST:
+    if test:
         break
 
-if _evaluate:
+if evaluate:
     f = open(evaluate_csv_path + 'evaluate-bean.csv', "wb")
     w = csv.writer(f)
     w.writerows(evaluation_csv)
     f.close()
-
-print('img:', max_time_img, ' max_time:', max_time, 's')
-print('img:', min_time_img, 'min_time:', min_time, 's')
-
