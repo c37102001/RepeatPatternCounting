@@ -22,7 +22,11 @@ for new version
 * if test all images in a folder:
     1. modify `input_dir`, `strct_edge_dir` and `hed_edge_dir` in config.ini
     2. run `python main.py --test_all`
-* add `--do_draw` if want to draw all process pictures 
+* add `--draw` if want to draw all process pictures 
+* add `--mark` if want to see every contour number in plots
 
 ## Result
-![img](./IMG_39_result.jpg)
+* marked contour
+![img](./img/IMG_39_marked.jpg)
+* some results
+![img](./img/IMG_39_result.jpg)

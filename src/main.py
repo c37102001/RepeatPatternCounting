@@ -2,6 +2,7 @@ import numpy as np
 import cv2
 import os
 import sys
+import traceback
 import math
 import time
 import csv
@@ -19,10 +20,12 @@ parser = ArgumentParser()
 parser.add_argument('--test', action='store_true')
 parser.add_argument('--img', type=str, help='img name with extention, like "IMG_ (16).jpg"')
 parser.add_argument('--test_all', action='store_true')
-parser.add_argument('--do_draw', action='store_true', help='draw all figures')
+parser.add_argument('--draw', action='store_true', help='draw all figures')
+parser.add_argument('--mark', action='store_true', help='mark contour num in figure')
 args = parser.parse_args()
 test = args.test
-do_draw = args.do_draw
+do_draw = args.draw
+do_mark = args.mark
 
 cfg = ConfigParser()
 cfg.read('config.ini')
@@ -78,7 +81,7 @@ def main(i, img_path):
     # resize_height=736, shape: (1365, 2048, 3) -> (736,1104,3)
     resize_factor = resize_height / img_height
     resi_input_img = cv2.resize(input_img, (0, 0), fx=resize_factor, fy=resize_factor)
-    drawer = ContourDrawer(resi_input_img, output_dir, img_name)
+    drawer = ContourDrawer(resi_input_img, output_dir, img_name, do_mark=do_mark)
     if do_draw:
         cv2.imwrite(output_dir + img_name + '_a_original_image.jpg', resi_input_img)
 
@@ -284,7 +287,14 @@ for i, img_path in enumerate(img_list):
         main(i, img_path)
     except KeyboardInterrupt:
         break
-    except Exception:
-        type, message, traceback = sys.exc_info()
-        print(f'[{img_path}] Exception occurred: {message}')
+    except Exception as e:
+        error_class = e.__class__.__name__
+        detail = e.args[0]
+        cl, exc, tb = sys.exc_info()
+        lastCallStack = traceback.extract_tb(tb)[-1]
+        fileName = lastCallStack[0]
+        lineNum = lastCallStack[1]
+        funcName = lastCallStack[2]
+        errMsg = f'File "{fileName}", line {lineNum}, in {funcName}: [{error_class}] {detail}'
+        print(f'[{img_path}] {errMsg}')
         continue

@@ -5,3 +5,4 @@ output_hed_strct/*
 input/*
 src/test.py
 .vscode/launch.json
+sync/*
