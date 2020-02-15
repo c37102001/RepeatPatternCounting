@@ -17,13 +17,10 @@ from get_group_cnts import get_group_cnts
 from utils import check_overlap, count_avg_gradient, evaluate_detection_performance
 
 parser = ArgumentParser()
-parser.add_argument('--test', action='store_true')
-parser.add_argument('--img', type=str, help='img name with extention, like "IMG_ (16).jpg"')
-parser.add_argument('--test_all', action='store_true')
+parser.add_argument('--test_all', action='store_true', help='test all images in image dir')
 parser.add_argument('--draw', action='store_true', help='draw all figures')
 parser.add_argument('--mark', action='store_true', help='mark contour num in figure')
 args = parser.parse_args()
-test = args.test
 do_draw = args.draw
 do_mark = args.mark
 
@@ -41,19 +38,21 @@ evaluate_csv_path = path_cfg['evaluate_csv_path']
 
 # image config
 img_cfg = cfg['img_cfg']
-if test:
-    img_list = [args.img]
-elif args.test_all:
+if args.test_all:
     img_list = os.listdir(input_dir)
 else:
     img_list = img_cfg['img_list'].split(',')
-
 resize_height = img_cfg.getfloat('resize_height')
 use_canny = img_cfg.getboolean('use_canny')
 use_structure = img_cfg.getboolean('use_structure')
 use_hed = img_cfg.getboolean('use_hed')
 use_combine = img_cfg.getboolean('use_combine')
 keep_overlap = img_cfg['keep_overlap'].split(',')
+
+# obviousity thresold config
+obvs_cfg = cfg['obviousity_cfg']
+area_thres = obvs_cfg.getfloat('area_thres')
+solidity_thres = obvs_cfg.getfloat('solidity_thres')
 
 # evaluate config
 eval_cfg = cfg['evaluate']
@@ -156,7 +155,7 @@ def main(i, img_path):
         for label in set(labels):
             cnts = [cnt_dict['cnt'] for cnt_dict in cnt_dicts if cnt_dict['label'] == label]
             img = drawer.draw_same_color(cnts, img)
-        drawer.save(img, 'g_RemoveOverlapCombineCnt')
+        drawer.save(img, 'g_RemoveOverlapCombine')
 
     # =============================== 3. Count group obviousity factors ===================================
 
@@ -168,7 +167,7 @@ def main(i, img_path):
 
         group_cnts = []
         avg_color_gradient = 0.0
-        avg_shape_factor = 0.0
+        avg_solidity_factor = 0.0
         total_area = 0.0
 
         # count obvious factor for each group 
@@ -178,25 +177,32 @@ def main(i, img_path):
             convex_area = cv2.contourArea(cv2.convexHull(cnt))
 
             total_area += cnt_area
-            avg_shape_factor += cnt_area / convex_area
+            avg_solidity_factor += cnt_area / convex_area
             avg_color_gradient += group_cnt_dict['color_gradient']
             group_cnts.append(cnt)
 
-        avg_shape_factor /= len(group_cnt_dicts)
+        avg_solidity_factor /= len(group_cnt_dicts)
         avg_color_gradient /= len(group_cnt_dicts)
 
         group_dicts.append({
             'group_cnts': group_cnts,
             'area': total_area,
             'color_gradient': avg_color_gradient, 
-            'shape': avg_shape_factor,
+            'solidity': avg_solidity_factor,
             'votes': 0,
         })
 
     # ================================= 4. Vote groups by obviousity =====================================
 
-    obvious_factors = ['area', 'shape', 'color_gradient']
+    obvious_factors = ['area', 'solidity', 'color_gradient']
     for factor in obvious_factors:
+
+        # count whole image avg color gradient and put into group_dicts
+        if factor == 'color_gradient':
+            avg_color_gradient = count_avg_gradient(resi_input_img)
+            group_dicts.append({'color_gradient': avg_color_gradient, 'votes': -1, 'group_cnts': []})
+
+        # sorting by factor from small to large
         group_dicts.sort(key=lambda group_dict: group_dict[factor], reverse=False)
         factor_list = [group[factor] for group in group_dicts]
         
@@ -209,30 +215,34 @@ def main(i, img_path):
             obvious_area = factor_list[obvious_index]
             for i in range(obvious_index-1, -1, -1):
                 area = factor_list[i]
-                if area * 2 > obvious_area:     # include closed area factor
+                thres = obvious_area * area_thres
+                if area > thres:     # include closed area factor
                     obvious_area = area
                     obvious_index = i
         
-        # check shape factor
-        elif factor == 'shape':
-            obvious_shape = factor_list[obvious_index]
-            for i, shape_factor in enumerate(factor_list[:obvious_index]):
-                if shape_factor > 0.8 * obvious_shape:   # include closed shape factor
+        # check solidity factor
+        elif factor == 'solidity':
+            obvious_solidity = factor_list[obvious_index]
+            thres = obvious_solidity * solidity_thres
+            for i, solidity_factor in enumerate(factor_list[:obvious_index]):
+                if solidity_factor > thres:   # include closed solidity factor
                     obvious_index = i
                     break
         
-        # check color_gradient
+        # check color gradient
         elif factor == 'color_gradient':
-            avg_gradient = count_avg_gradient(resi_input_img)   # count whole image avg color gradient
-            for i in range(obvious_index, len(factor_list)):    # exclude those less than avg_gradient
-                if factor_list[i] < avg_gradient:
-                    obvious_index += 1
+            avg_gradient_idx = next(i for i, d in enumerate(group_dicts) if d['votes'] == -1)
+            # if avg largar than all obvious, set obvs_idx=len so no one gets vote
+            if avg_gradient_idx == len(group_dicts) - 1:    
+                obvious_index = len(group_dicts)
+                thres = avg_color_gradient
+                print('Every color gradient is less than average gradient.')
+            
+            # else those obvious who is larger than avg gets vote
+            else:
+                obvious_index = max(obvious_index, avg_gradient_idx + 1)
+                thres = factor_list[obvious_index]
 
-            # skip if all color gradients are less tha avg_gradient
-            if obvious_index == len(factor_list):
-                print('No color_gradient result')
-                continue
-        
         for group in group_dicts[obvious_index:]:
             group['votes'] += 1
 
@@ -242,12 +252,16 @@ def main(i, img_path):
                 img = drawer.draw_same_color(group['group_cnts'], img, color=(0, 255, 0))  # green for obvious
             for group in group_dicts[:obvious_index]:
                 img = drawer.draw_same_color(group['group_cnts'], img, color=(0, 0, 255))  # red for others
-            drawer.save(img, desc=f'h_Obvious{factor.capitalize()}')
+            drawer.save(img, desc=f'h_ObviousCnt_{factor.capitalize()}')
 
             plt.bar(x=range(len(factor_list)), height=factor_list)
-            plt.title(f'{factor} cut idx: {obvious_index} | value: {factor_list[obvious_index]}')
-            plt.savefig(f'{output_dir}{img_name}_h_Obvious{factor.capitalize()}_hist.png')
+            plt.title(f'{factor} cut idx: {obvious_index} | threshold: {thres: .3f}')
+            plt.savefig(f'{output_dir}{img_name}_h_ObviousHist{factor.capitalize()}.png')
             plt.close()
+
+        # remove avg color gradient from group_dicts
+        if factor == 'color_gradient':
+            group_dicts.remove({'color_gradient': avg_color_gradient, 'votes': -1, 'group_cnts': []})
     
     # ============================ 5. Choose groups with most votes ==================================
 

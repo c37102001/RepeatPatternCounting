@@ -47,5 +47,6 @@ class ContourDrawer:
         return img
     
     def save(self, img, desc):
+        img = cv2.putText(img, desc, (20, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
         img_path = '{}{}_{}.jpg'.format(self.output_path, self.img_name, desc)
         cv2.imwrite(img_path, img)

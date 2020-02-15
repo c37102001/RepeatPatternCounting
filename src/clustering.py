@@ -5,7 +5,7 @@ from ipdb import set_trace as pdb
 
 AVG_NUM = 5
 
-def hierarchical_clustering(feature_list, feature_type, edge_type, drawer, do_draw=False):
+def hierarchical_clustering(feature_list, feature_type, edge_type, keep, drawer, do_draw=False):
     
     # hierarchically link features by order of distance(measured by 'ward'), output a hierarchical tree
     # return ndarray sized [#feature_list-1, 4], 4 means (group idx1, gp idx2, gp_distance, included ele num)
@@ -36,7 +36,7 @@ def hierarchical_clustering(feature_list, feature_type, edge_type, drawer, do_dr
     max_ratio = max(ratio_list)
     max_ratio_idx = ratio_list.index(max_ratio)
     if max_ratio < 2.0:
-        print('all in one group! max_ratio:', max_ratio)
+        print(f'[{edge_type}] [{feature_type}] clustering all in one group! max_ratio:', max_ratio)
         return [0] * len(feature_list)
 
     # to find the 'target'(not always max) difference idx, plus one to max ratio idx
@@ -51,8 +51,8 @@ def hierarchical_clustering(feature_list, feature_type, edge_type, drawer, do_dr
     # plot difference bar chart
     if do_draw:
         plt.bar(x=range(len(diff_list)), height=diff_list)
-        plt.title(f'{feature_type.capitalize()} cut idx: {target_diff_idx} | value: {target_diff:.3f} | ratio: {max_ratio:.3f}')
-        save_path = f'{drawer.output_path}{drawer.img_name}_f_{edge_type}({feature_type})_hist.png'
+        plt.title(f'{feature_type.capitalize()}_{keep} cut idx: {target_diff_idx} | value: {target_diff:.3f} | ratio: {max_ratio:.3f}')
+        save_path = f'{drawer.output_path}{drawer.img_name}_f_{edge_type}_{keep}_hist_{feature_type.capitalize()}.png'
         plt.savefig(save_path)
         plt.close()
 
