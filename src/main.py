@@ -47,7 +47,6 @@ use_canny = img_cfg.getboolean('use_canny')
 use_structure = img_cfg.getboolean('use_structure')
 use_hed = img_cfg.getboolean('use_hed')
 use_combine = img_cfg.getboolean('use_combine')
-keep_overlap = img_cfg['keep_overlap'].split(',')
 
 # obviousity thresold config
 obvs_cfg = cfg['obviousity_cfg']
@@ -82,7 +81,7 @@ def main(i, img_path):
     resi_input_img = cv2.resize(input_img, (0, 0), fx=resize_factor, fy=resize_factor)
     drawer = ContourDrawer(resi_input_img, output_dir, img_name, do_mark=do_mark)
     if do_draw:
-        cv2.imwrite(output_dir + img_name + '_a_original_image.jpg', resi_input_img)
+        cv2.imwrite(output_dir + img_name + '_0_original_image.jpg', resi_input_img)
 
 
     #===================================== 1. Get grouped contours  ===================================
@@ -90,9 +89,8 @@ def main(i, img_path):
     groups_cnt_dicts = []
     if use_canny:
         edge_img = canny_edge_detect(img)
-        for keep in keep_overlap:
-            _groups_cnt_dicts = get_group_cnts(drawer, edge_img, 'Canny', keep=keep, do_enhance=False, do_draw=do_draw)
-            groups_cnt_dicts.extend(_groups_cnt_dicts)
+        _groups_cnt_dicts = get_group_cnts(drawer, edge_img, 'Canny', do_enhance=False, do_draw=do_draw)
+        groups_cnt_dicts.extend(_groups_cnt_dicts)
     
     edge_imgs = []
     if use_structure:
@@ -112,9 +110,9 @@ def main(i, img_path):
         edge_img = cv2.imread(edge_path, cv2.IMREAD_GRAYSCALE)
         edge_img = cv2.resize(edge_img, (0, 0), fx=resize_factor, fy=resize_factor)     # shape: (736, *)
 
-        for keep in keep_overlap:
-            _groups_cnt_dicts = get_group_cnts(drawer, edge_img, edge_type, keep=keep, do_draw=do_draw)
-            groups_cnt_dicts.extend(_groups_cnt_dicts)
+        
+        _groups_cnt_dicts = get_group_cnts(drawer, edge_img, edge_type, do_draw=do_draw)
+        groups_cnt_dicts.extend(_groups_cnt_dicts)
 
     if use_combine:
         strct_edge_path = strct_edge_dir + img_name + '_edge.jpg'
@@ -126,9 +124,8 @@ def main(i, img_path):
             edge = (strct_edge + hed_edge)
             edge = cv2.resize(edge, (0, 0), fx=resize_height / img_height, fy=resize_height / img_height)
 
-            for keep in keep_overlap:
-                _groups_cnt_dicts = get_group_cnts(drawer, edge, 'Combine', keep=keep, do_draw=do_draw)
-                groups_cnt_dicts.extend(_groups_cnt_dicts)
+            _groups_cnt_dicts = get_group_cnts(drawer, edge, 'Combine', do_draw=do_draw)
+            groups_cnt_dicts.extend(_groups_cnt_dicts)
         else:
             print('[Error] Lack of edge images for combine')
 
@@ -155,7 +152,7 @@ def main(i, img_path):
         for label in set(labels):
             cnts = [cnt_dict['cnt'] for cnt_dict in cnt_dicts if cnt_dict['label'] == label]
             img = drawer.draw_same_color(cnts, img)
-        drawer.save(img, 'g_RemoveOverlapCombine')
+        drawer.save(img, '2_CombineGroups')
 
     # =============================== 3. Count group obviousity factors ===================================
 
@@ -252,11 +249,11 @@ def main(i, img_path):
                 img = drawer.draw_same_color(group['group_cnts'], img, color=(0, 255, 0))  # green for obvious
             for group in group_dicts[:obvious_index]:
                 img = drawer.draw_same_color(group['group_cnts'], img, color=(0, 0, 255))  # red for others
-            drawer.save(img, desc=f'h_ObviousCnt_{factor.capitalize()}')
+            drawer.save(img, desc=f'4_Obvious_{factor}')
 
             plt.bar(x=range(len(factor_list)), height=factor_list)
             plt.title(f'{factor} cut idx: {obvious_index} | threshold: {thres: .3f}')
-            plt.savefig(f'{output_dir}{img_name}_h_ObviousHist{factor.capitalize()}.png')
+            plt.savefig(f'{output_dir}{img_name}_4_Obvious_{factor}.png')
             plt.close()
 
         # remove avg color gradient from group_dicts
@@ -282,7 +279,7 @@ def main(i, img_path):
         img = drawer.draw_same_color(cnts, img)
     img = cv2.resize(img, (0, 0), fx=1/resize_factor, fy=1/resize_factor)
     img = np.concatenate((input_img, img), axis=1)
-    drawer.save(img, 'l_FinalResult')
+    drawer.save(img, '5_FinalResult')
 
     print(f'Total Groups: {len(obvious_groups)} (cnt num: {[len(g["group_cnts"]) for g in obvious_groups]})')
     print(f'Finished in {time.time() - start} s')

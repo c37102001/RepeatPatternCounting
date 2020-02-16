@@ -37,3 +37,8 @@ for new version
   * add obviousity thresholds into config.ini
   * remove --test --img arg flags
   * add title in image
+
+* 0216-1
+  * [Important] change remove overlap(outer contour) method(in get_group_cnts) and delete keep_list
+  * [Important] remove keep_overlap list in config.ini and modify remove_overlap function. now only allow keep inner
+  * rename images to re-order outputs.

@@ -5,7 +5,7 @@ from ipdb import set_trace as pdb
 
 AVG_NUM = 5
 
-def hierarchical_clustering(feature_list, feature_type, edge_type, keep, drawer, do_draw=False):
+def hierarchical_clustering(feature_list, feature_type, edge_type, drawer, do_draw=False):
     
     # hierarchically link features by order of distance(measured by 'ward'), output a hierarchical tree
     # return ndarray sized [#feature_list-1, 4], 4 means (group idx1, gp idx2, gp_distance, included ele num)
@@ -51,8 +51,8 @@ def hierarchical_clustering(feature_list, feature_type, edge_type, keep, drawer,
     # plot difference bar chart
     if do_draw:
         plt.bar(x=range(len(diff_list)), height=diff_list)
-        plt.title(f'{feature_type.capitalize()}_{keep} cut idx: {target_diff_idx} | value: {target_diff:.3f} | ratio: {max_ratio:.3f}')
-        save_path = f'{drawer.output_path}{drawer.img_name}_f_{edge_type}_{keep}_hist_{feature_type.capitalize()}.png'
+        plt.title(f'{feature_type} cut idx: {target_diff_idx} | value: {target_diff:.3f} | ratio: {max_ratio:.3f}')
+        save_path = f'{drawer.output_path}{drawer.img_name}_1_{edge_type}-5b_{feature_type}.png'
         plt.savefig(save_path)
         plt.close()
 

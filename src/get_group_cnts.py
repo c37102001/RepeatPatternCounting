@@ -9,7 +9,7 @@ from ipdb import set_trace as pdb
 _gray_value_redistribution_local = True
 
 
-def get_group_cnts(drawer, edge_img, edge_type, keep='inner', do_enhance=True, do_draw=False):
+def get_group_cnts(drawer, edge_img, edge_type, do_enhance=True, do_draw=False):
     ''' Do contour detection, filter contours, feature extract and cluster.
 
     Args:
@@ -32,7 +32,7 @@ def get_group_cnts(drawer, edge_img, edge_type, keep='inner', do_enhance=True, d
     img_name = drawer.img_name
 
     if do_draw:
-        img_path = f'{output_path}{img_name}_b_{edge_type}_OriginEdge.jpg'
+        img_path = f'{output_path}{img_name}_1_{edge_type}-0_OriginEdge.jpg'
         cv2.imwrite(img_path, edge_img)
 
     if do_enhance:  
@@ -44,36 +44,40 @@ def get_group_cnts(drawer, edge_img, edge_type, keep='inner', do_enhance=True, d
             edge_img = cv2.equalizeHist(edge_img) # golbal equalization
 
         if do_draw:
-            img_path = f'{output_path}{img_name}_c_{edge_type}_EnhancedEdge.jpg'
+            img_path = f'{output_path}{img_name}_1_{edge_type}-1_EnhancedEdge.jpg'
             cv2.imwrite(img_path, edge_img)
 
-    '''find contours'''
     # threshold to 0 or 255
     edge_img = cv2.threshold(edge_img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
 
     # find closed contours, return (list of ndarray), len = Num_of_cnts, ele = (Num_of_pixels, 1, 2(x,y))
-    contours = cv2.findContours(edge_img, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)[-2]
-
+    contours, hierarchy = cv2.findContours(edge_img, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)
+    print(f'# of original contours: {len(contours)}')
     if do_draw:
         img = drawer.draw(contours)
-        desc = f'd_{edge_type}_{keep}_OriginContour'
+        desc = f'1_{edge_type}-2_OriginContour'
+        drawer.save(img, desc)
+
+    # filter contours that has children (outer overlap contour)
+    inner_contours = []
+    for contour, has_child in zip(contours, hierarchy[0,:,2]):
+        if has_child == -1:
+            inner_contours.append(contour)
+    contours = inner_contours
+    print(f'# after removing overlapped: {len(contours)}')
+    if do_draw:
+        img = drawer.draw(contours)
+        desc = f'1_{edge_type}-3_RemovedOuter'
         drawer.save(img, desc)
     
     # filter contours by area, perimeter, solidity, edge_num
     height, width = drawer.color_img.shape[:2]
     contours = filter_contours(contours, height, width)
+    print(f'# after filtering: {len(contours)}')
     if do_draw:
         img = drawer.draw(contours)
-        desc = f'e_{edge_type}_{keep}_Filterd'
+        desc = f'1_{edge_type}-4_Filterd'
         drawer.save(img, desc)
-    
-    # remove outer overlap contour
-    if not keep == 'all':
-        contours, discard_contours = remove_overlap(contours, keep)
-        if do_draw:
-            img = drawer.draw_same_color(contours)
-            desc = f'e_{edge_type}_{keep}_RemovedOverlapped'
-            drawer.save(img, desc)
     
     # return if too less contours
     if len(contours) <= 3:
@@ -81,10 +85,10 @@ def get_group_cnts(drawer, edge_img, edge_type, keep='inner', do_enhance=True, d
         return []
 
     # Extract contour color, size, shape, color_gradient features
-    cnt_dicts = get_contour_feature(drawer.color_img, contours, edge_type, keep)
+    cnt_dicts = get_contour_feature(drawer.color_img, contours, edge_type)
     
     # cluster cnts into groups
-    groups_cnt_dicts = cluster_features(contours, cnt_dicts, drawer, edge_type, keep, do_draw)
+    groups_cnt_dicts = cluster_features(contours, cnt_dicts, drawer, edge_type, do_draw)
     
     return groups_cnt_dicts
 
@@ -121,7 +125,7 @@ def filter_contours(contours, re_height, re_width):
     return accept_contours
 
 
-def cluster_features(contours, cnt_dicts, drawer, edge_type, keep, do_draw=False):
+def cluster_features(contours, cnt_dicts, drawer, edge_type, do_draw=False):
 
     # Do hierarchicalclustering by shape, color, and size
     label_dict = {}
@@ -129,7 +133,7 @@ def cluster_features(contours, cnt_dicts, drawer, edge_type, keep, do_draw=False
         feature_list = [cnt_dic[feature_type] for cnt_dic in cnt_dicts]
 
         # ndarray e.g. ([1, 1, 1, 1, 1, 3, 3, 2, 2, 2]), len=#feature_list
-        labels = hierarchical_clustering(feature_list, feature_type, edge_type, keep, drawer, do_draw)
+        labels = hierarchical_clustering(feature_list, feature_type, edge_type, drawer, do_draw)
         label_dict[feature_type] = labels
 
         if do_draw:
@@ -137,7 +141,7 @@ def cluster_features(contours, cnt_dicts, drawer, edge_type, keep, do_draw=False
             for label in set(labels):
                 cnt_dic_list_by_groups = [c for i, c in enumerate(contours) if labels[i] == label]
                 img = drawer.draw_same_color(cnt_dic_list_by_groups, img)
-            desc = f'f_{edge_type}_{keep}_{feature_type.capitalize()}'
+            desc = f'1_{edge_type}-5a_{feature_type.capitalize()}Group'
             drawer.save(img, desc)
 
     # combine the label clustered by size, shape, and color. ex: (0,1,1), (2,0,1)
@@ -165,7 +169,7 @@ def cluster_features(contours, cnt_dicts, drawer, edge_type, keep, do_draw=False
         img = drawer.draw_same_color(cnts, img)
         
     if do_draw:
-        desc = f'g_{edge_type}_{keep}_OriginalResult'
+        desc = f'1_{edge_type}-6_GroupedResult'
         drawer.save(img, desc)
     
     return groups_cnt_dicts

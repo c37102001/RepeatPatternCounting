@@ -5,24 +5,16 @@ from ipdb import set_trace as pdb
 import itertools
 
 
-def remove_overlap(contours, keep):
-    # sort from min to max
+def remove_overlap(contours):
+    # sort from min to max, and always keep inner
     contours.sort(key=lambda x: len(x), reverse=False)
     overlap_idx = []
 
     for i, cnt1 in enumerate(contours[:-1]):
         for j, cnt2 in enumerate(contours[i+1: ], start=i+1):
             if is_overlap(cnt1, cnt2):
-                if keep == 'inner':
-                    overlap_idx.append(j)
-                if keep == 'outer':
-                    overlap_idx.append(i)
+                overlap_idx.append(j)
 
-    # # old version (keep inner)
-    # for small_idx, (cnt1, cnt2) in enumerate(zip(contours[:-1], contours[1:])):
-    #     if is_overlap(cnt1, cnt2):
-    #         overlap_idx.append(small_idx + 1)
-    
     overlap_idx = list(set(overlap_idx))
     keep_idx = [i for i in range(len(contours)) if i not in overlap_idx]
     keep_contours = [contours[idx] for idx in keep_idx]
