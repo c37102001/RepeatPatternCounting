@@ -31,8 +31,6 @@ cfg.read('config.ini')
 path_cfg = cfg['path']
 input_dir = path_cfg['input_dir']
 output_dir = path_cfg['output_dir']
-strct_edge_dir = path_cfg['strct_edge_dir']
-hed_edge_dir = path_cfg['hed_edge_dir']
 csv_output = path_cfg['csv_output']
 evaluate_csv_path = path_cfg['evaluate_csv_path']
 
@@ -43,10 +41,7 @@ if args.test_all:
 else:
     img_list = img_cfg['img_list'].split(',')
 resize_height = img_cfg.getfloat('resize_height')
-use_canny = img_cfg.getboolean('use_canny')
-use_structure = img_cfg.getboolean('use_structure')
-use_hed = img_cfg.getboolean('use_hed')
-use_combine = img_cfg.getboolean('use_combine')
+use_edge = img_cfg['use_edge'].split(',')
 
 # obviousity thresold config
 obvs_cfg = cfg['obviousity_cfg']
@@ -87,47 +82,25 @@ def main(i, img_path):
     #===================================== 1. Get grouped contours  ===================================
     
     groups_cnt_dicts = []
-    if use_canny:
-        edge_img = canny_edge_detect(img)
-        _groups_cnt_dicts = get_group_cnts(drawer, edge_img, 'Canny', do_enhance=False, do_draw=do_draw)
-        groups_cnt_dicts.extend(_groups_cnt_dicts)
-    
-    edge_imgs = []
-    if use_structure:
-        edge_path = strct_edge_dir + img_name + '_edge.jpg'
-        edge_type = 'Structure'
-        edge_imgs.append((edge_path, edge_type))
-    if use_hed:
-        edge_path = hed_edge_dir + img_name + '_hed.png'
-        edge_type = 'HED'
-        edge_imgs.append((edge_path, edge_type))
-    
-    # detect contours, filter, extract features, cluster for edge image
-    for edge_path, edge_type in edge_imgs:
-        if not os.path.isfile(edge_path):
-            print(f'[Error] EDGE FILE {edge_path} does not exist!')
-            continue
-        edge_img = cv2.imread(edge_path, cv2.IMREAD_GRAYSCALE)
-        edge_img = cv2.resize(edge_img, (0, 0), fx=resize_factor, fy=resize_factor)     # shape: (736, *)
-
+    for edge_type in use_edge:
+        edge_type = edge_type.strip()
+        edge_dir, img_extension, do_enhance = img_cfg[edge_type].split(',')
+        do_enhance = eval(do_enhance)
         
-        _groups_cnt_dicts = get_group_cnts(drawer, edge_img, edge_type, do_draw=do_draw)
-        groups_cnt_dicts.extend(_groups_cnt_dicts)
-
-    if use_combine:
-        strct_edge_path = strct_edge_dir + img_name + '_edge.jpg'
-        hed_edge_path = hed_edge_dir + img_name + '_hed.png'
-
-        if os.path.isfile(strct_edge_path) and os.path.isfile(hed_edge_path):
-            strct_edge = cv2.imread(strct_edge_path, cv2.IMREAD_GRAYSCALE)
-            hed_edge = cv2.imread(hed_edge_path, cv2.IMREAD_GRAYSCALE)
-            edge = (strct_edge + hed_edge)
-            edge = cv2.resize(edge, (0, 0), fx=resize_height / img_height, fy=resize_height / img_height)
-
-            _groups_cnt_dicts = get_group_cnts(drawer, edge, 'Combine', do_draw=do_draw)
-            groups_cnt_dicts.extend(_groups_cnt_dicts)
+        # get edge image
+        if edge_type == 'Canny':
+            edge_img = canny_edge_detect(img)
         else:
-            print('[Error] Lack of edge images for combine')
+            edge_path = edge_dir.strip() + img_name + img_extension.strip()
+            if not os.path.isfile(edge_path):
+                print(f'[Error] EDGE FILE {edge_path} does not exist!')
+                continue
+            edge_img = cv2.imread(edge_path, cv2.IMREAD_GRAYSCALE)
+            edge_img = cv2.resize(edge_img, (0, 0), fx=resize_factor, fy=resize_factor)     # shape: (736, *)
+
+        # filter and group contours
+        _groups_cnt_dicts = get_group_cnts(drawer, edge_img, edge_type, do_enhance, do_draw)
+        groups_cnt_dicts.extend(_groups_cnt_dicts)
 
     # ============================== 2. Remove group overlap and combine ==============================
     

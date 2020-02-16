@@ -13,22 +13,20 @@ def add_border_edge(edge_img):
     return edge_img
 
 
-def remove_overlap(contours):
-    # sort from min to max, and always keep inner
-    contours.sort(key=lambda x: len(x), reverse=False)
-    overlap_idx = []
+def get_centroid(cnt):
+    M = cv2.moments(cnt)
+    cx = int(M['m10'] / M['m00'])
+    cy = int(M['m01'] / M['m00'])
+    return cx, cy
 
-    for i, cnt1 in enumerate(contours[:-1]):
-        for j, cnt2 in enumerate(contours[i+1: ], start=i+1):
-            if is_overlap(cnt1, cnt2):
-                overlap_idx.append(j)
 
-    overlap_idx = list(set(overlap_idx))
-    keep_idx = [i for i in range(len(contours)) if i not in overlap_idx]
-    keep_contours = [contours[idx] for idx in keep_idx]
-    discard_contours = [contours[idx] for idx in overlap_idx]
-    
-    return keep_contours, discard_contours
+def eucl_distance(a, b):
+    if type(a) != np.ndarray:
+        a = np.array(a)
+    if type(b) != np.ndarray:
+        b = np.array(b)
+
+    return np.linalg.norm(a - b)
 
 
 def is_overlap(cnt1, cnt2):
@@ -43,6 +41,7 @@ def is_overlap(cnt1, cnt2):
         return True
     
     return False
+
 
 def check_overlap(cnt_dicts):
     label_change_list = []
@@ -64,12 +63,16 @@ def check_overlap(cnt_dicts):
     for (less_label, more_label) in set(label_change_list):
         overlap_times = label_change_list.count((less_label, more_label))
         less_weight = label_list.count(less_label)
+        more_weight = label_list.count(more_label)
         if overlap_times >= 0.5 * less_weight:          # 0.5 Changeable
             found = False
             for label_group in label_group_change:
                 if less_label in label_group:
                     found = True
-                    label_group.append(more_label)
+                    if more_weight >= label_list.count(label_group[-1]):    # >= means when equal, choose later edge map
+                        label_group.append(more_label)
+                    else:
+                        label_group.insert(0, more_label)
                 if more_label in label_group:
                     found = True
                     label_group.insert(0, less_label)
@@ -119,19 +122,6 @@ def count_avg_gradient(img, model='lab'):
         
     return avg_gradient
 
-def get_centroid(cnt):
-    M = cv2.moments(cnt)
-    cx = int(M['m10'] / M['m00'])
-    cy = int(M['m01'] / M['m00'])
-    return cx, cy
-
-def eucl_distance(a, b):
-    if type(a) != np.ndarray:
-        a = np.array(a)
-    if type(b) != np.ndarray:
-        b = np.array(b)
-
-    return np.linalg.norm(a - b)
 
 def evaluate_detection_performance(img, fileName, final_group_cnt, resize_ratio, evaluate_csv_path):
     '''
@@ -205,6 +195,7 @@ def evaluate_detection_performance(img, fileName, final_group_cnt, resize_ratio,
     print(program_count, groundtruth_count)
     return tp, fp, fn, pr, re, fm, er
     # _____________________1 st evaluation end__________________________________________________
+
 
 def Get_Cnt_Area_Coordinate(img, final_group_cnt):
     '''

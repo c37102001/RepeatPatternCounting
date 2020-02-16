@@ -45,3 +45,8 @@ for new version
 
 * 0216-2
   * [Important] add edge on border (add method in utils)
+
+* 0216-3
+  * [Important] move edge usage into config.ini use_edge and remove combine option
+  * [Important] fix check_overlap label_weight sorting bug
+    * Note: setting `if more_weight >= label_list.count(label_group[-1]):...` means when weights are equal, choose later edge map in config.ini, so the use_edge order do affect result sometimes. The better edge image should put later.
