@@ -42,3 +42,6 @@ for new version
   * [Important] change remove overlap(outer contour) method(in get_group_cnts) and delete keep_list
   * [Important] remove keep_overlap list in config.ini and modify remove_overlap function. now only allow keep inner
   * rename images to re-order outputs.
+
+* 0216-2
+  * [Important] add edge on border (add method in utils)

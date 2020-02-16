@@ -5,6 +5,14 @@ from ipdb import set_trace as pdb
 import itertools
 
 
+def add_border_edge(edge_img):
+    edge_img[0] = 255       # first row
+    edge_img[-1] = 255      # last row
+    edge_img[:, 0] = 255    # first column
+    edge_img[:, -1] = 255   # last column
+    return edge_img
+
+
 def remove_overlap(contours):
     # sort from min to max, and always keep inner
     contours.sort(key=lambda x: len(x), reverse=False)

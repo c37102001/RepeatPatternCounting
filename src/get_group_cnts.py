@@ -1,6 +1,6 @@
 import cv2
 import numpy as np
-from utils import remove_overlap
+from utils import add_border_edge
 from clustering import hierarchical_clustering
 from extract_feature import get_contour_feature
 from ipdb import set_trace as pdb
@@ -49,6 +49,9 @@ def get_group_cnts(drawer, edge_img, edge_type, do_enhance=True, do_draw=False):
 
     # threshold to 0 or 255
     edge_img = cv2.threshold(edge_img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
+
+    # add edge on border
+    edge_img = add_border_edge(edge_img)
 
     # find closed contours, return (list of ndarray), len = Num_of_cnts, ele = (Num_of_pixels, 1, 2(x,y))
     contours, hierarchy = cv2.findContours(edge_img, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)
