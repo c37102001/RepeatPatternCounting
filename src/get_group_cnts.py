@@ -38,7 +38,7 @@ def get_group_cnts(drawer, edge_img, edge_type, do_enhance=True, do_draw=False):
     if do_enhance:  
         # Enhance edge
         if _gray_value_redistribution_local:
-            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(9, 9))
             edge_img = clahe.apply(edge_img)
         else:
             edge_img = cv2.equalizeHist(edge_img) # golbal equalization
@@ -97,37 +97,24 @@ def get_group_cnts(drawer, edge_img, edge_type, do_enhance=True, do_draw=False):
 
 
 def filter_contours(contours, re_height, re_width):
-    MIN_PERIMETER = 60
+    MIN_PERIMETER = 100
     MAX_CNT_SIZE = 1 / 5
     MIN_CNT_SIZE = 1 / 30000
-    SOLIDITY_THRE = 0.5
-    MAX_EDGE_NUM = 50
+    MIN_AREA_OVER_LEN = 3
     
     accept_contours = []
-    avg_solidity = 0
     for c in contours:
-        perimeter = len(c)
+        perimeter = cv2.arcLength(c, closed=True)
+        contour_area = cv2.contourArea(c)
         if perimeter < MIN_PERIMETER or perimeter > (re_height + re_width) * 2 / 3.0:
             continue
-        
-        contour_area = cv2.contourArea(c)
         if contour_area < (re_height * re_width) * MIN_CNT_SIZE or contour_area > (re_height * re_width) * MAX_CNT_SIZE:
             continue
-
-        epsilon = 0.01 * cv2.arcLength(c, closed=True)
-        edge_num = len(cv2.approxPolyDP(c, epsilon, closed=True))
-        if edge_num > MAX_EDGE_NUM:
+        if contour_area / perimeter < MIN_AREA_OVER_LEN:
             continue
-
-        convex_area = cv2.contourArea(cv2.convexHull(c))
-        solidity = contour_area / convex_area
-        avg_solidity += solidity
-
-        accept_contours.append((c, solidity))
-
-    avg_solidity /= len(contours)
-    accept_contours = filter(lambda x: x[1] > avg_solidity * 0.8, accept_contours)
-    accept_contours = [c for c, solidity in [*accept_contours]]
+        
+        accept_contours.append(c)
+    
     return accept_contours
 
 

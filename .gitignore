@@ -7,3 +7,4 @@ src/test.py
 .vscode/launch.json
 sync/*
 mission/*
+PoolNet

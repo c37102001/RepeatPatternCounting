@@ -53,3 +53,6 @@ for new version
   * [Important] add sliding_window.py
   * [Important] add saliency in input image dir and config.ini
   * change solidity threshold in contour filtering to average solidity.
+
+* 0217-2
+  * [Important] replace solidity filter to area_over_perimeter in `filter_contours`
