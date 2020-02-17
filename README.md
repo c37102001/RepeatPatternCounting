@@ -1,12 +1,15 @@
 # Repeat Pattern Counting
 
+
 ## Preparation
 (Images are available from https://ppt.cc/ffLrKx)
 
-* put color imgs(det_imgs) in `input/image`
-* put structure forest edge imgs(det_edges) in `input/edge_image`
-* put HED edge imgs(hed_edges) in `input/hed_edge_image`
+* put color imgs(det_imgs) in `input/image/`
+* put structure forest edge imgs(det_edges) in `input/edge_image/`
+* put HED edge imgs(hed_edges) in `input/hed_edge_image/`
+* put saliency imgs (saliency_maps) in `input/saliency_image/`
 * modify configs in `config.ini`
+
 
 ## How to run
 for old version
@@ -23,11 +26,6 @@ for new version
 * add `--draw` if want to draw all process pictures 
 * add `--mark` if want to see every contour number in plots
 
-## Result
-* marked contour
-![img](./img/IMG_39_marked.jpg)
-* some results
-![img](./img/IMG_39_result.jpg)
 
 ## Update
 * 0215-1
@@ -50,3 +48,8 @@ for new version
   * [Important] move edge usage into config.ini use_edge and remove combine option
   * [Important] fix check_overlap label_weight sorting bug
     * Note: setting `if more_weight >= label_list.count(label_group[-1]):...` means when weights are equal, choose later edge map in config.ini, so the use_edge order do affect result sometimes. The better edge image should put later.
+
+* 0217-1
+  * [Important] add sliding_window.py
+  * [Important] add saliency in input image dir and config.ini
+  * change solidity threshold in contour filtering to average solidity.

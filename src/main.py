@@ -89,7 +89,7 @@ def main(i, img_path):
         
         # get edge image
         if edge_type == 'Canny':
-            edge_img = canny_edge_detect(img)
+            edge_img = canny_edge_detect(resi_input_img)
         else:
             edge_path = edge_dir.strip() + img_name + img_extension.strip()
             if not os.path.isfile(edge_path):

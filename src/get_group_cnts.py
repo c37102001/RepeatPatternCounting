@@ -55,7 +55,7 @@ def get_group_cnts(drawer, edge_img, edge_type, do_enhance=True, do_draw=False):
 
     # find closed contours, return (list of ndarray), len = Num_of_cnts, ele = (Num_of_pixels, 1, 2(x,y))
     contours, hierarchy = cv2.findContours(edge_img, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)
-    print(f'# of original contours: {len(contours)}')
+    print(f'[{edge_type}] # of original contours: {len(contours)}')
     if do_draw:
         img = drawer.draw(contours)
         desc = f'1_{edge_type}-2_OriginContour'
@@ -67,7 +67,7 @@ def get_group_cnts(drawer, edge_img, edge_type, do_enhance=True, do_draw=False):
         if has_child == -1:
             inner_contours.append(contour)
     contours = inner_contours
-    print(f'# after removing overlapped: {len(contours)}')
+    print(f'[{edge_type}] # after removing overlapped: {len(contours)}')
     if do_draw:
         img = drawer.draw(contours)
         desc = f'1_{edge_type}-3_RemovedOuter'
@@ -76,7 +76,7 @@ def get_group_cnts(drawer, edge_img, edge_type, do_enhance=True, do_draw=False):
     # filter contours by area, perimeter, solidity, edge_num
     height, width = drawer.color_img.shape[:2]
     contours = filter_contours(contours, height, width)
-    print(f'# after filtering: {len(contours)}')
+    print(f'[{edge_type}] # after filtering: {len(contours)}')
     if do_draw:
         img = drawer.draw(contours)
         desc = f'1_{edge_type}-4_Filterd'
@@ -104,6 +104,7 @@ def filter_contours(contours, re_height, re_width):
     MAX_EDGE_NUM = 50
     
     accept_contours = []
+    avg_solidity = 0
     for c in contours:
         perimeter = len(c)
         if perimeter < MIN_PERIMETER or perimeter > (re_height + re_width) * 2 / 3.0:
@@ -113,18 +114,20 @@ def filter_contours(contours, re_height, re_width):
         if contour_area < (re_height * re_width) * MIN_CNT_SIZE or contour_area > (re_height * re_width) * MAX_CNT_SIZE:
             continue
 
-        convex_area = cv2.contourArea(cv2.convexHull(c))
-        solidity = contour_area / convex_area
-        if solidity < SOLIDITY_THRE:
-            continue
-
         epsilon = 0.01 * cv2.arcLength(c, closed=True)
         edge_num = len(cv2.approxPolyDP(c, epsilon, closed=True))
         if edge_num > MAX_EDGE_NUM:
             continue
 
-        accept_contours.append(c)
+        convex_area = cv2.contourArea(cv2.convexHull(c))
+        solidity = contour_area / convex_area
+        avg_solidity += solidity
 
+        accept_contours.append((c, solidity))
+
+    avg_solidity /= len(contours)
+    accept_contours = filter(lambda x: x[1] > avg_solidity * 0.8, accept_contours)
+    accept_contours = [c for c, solidity in [*accept_contours]]
     return accept_contours
 
 
