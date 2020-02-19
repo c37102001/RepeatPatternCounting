@@ -56,3 +56,7 @@ for new version
 
 * 0217-2
   * [Important] replace solidity filter to area_over_perimeter in `filter_contours`
+
+* 0219-1
+  * [Important] change filter to approxPolyDP, convexHull
+  * change area featrue extraction method from arcLength to contourArea

@@ -75,7 +75,7 @@ def main(i, img_path):
     resize_factor = resize_height / img_height
     resi_input_img = cv2.resize(input_img, (0, 0), fx=resize_factor, fy=resize_factor)
     drawer = ContourDrawer(resi_input_img, output_dir, img_name, do_mark=do_mark)
-    if do_draw:
+    if do_draw or True:
         cv2.imwrite(output_dir + img_name + '_0_original_image.jpg', resi_input_img)
 
 
@@ -101,7 +101,7 @@ def main(i, img_path):
         # filter and group contours
         _groups_cnt_dicts = get_group_cnts(drawer, edge_img, edge_type, do_enhance, do_draw)
         groups_cnt_dicts.extend(_groups_cnt_dicts)
-
+    
     # ============================== 2. Remove group overlap and combine ==============================
     
     # add label and group weight(num of cnts in the group) into contour dictionary
@@ -120,19 +120,19 @@ def main(i, img_path):
     labels = [cnt_dict['label'] for cnt_dict in cnt_dicts]  # show labels and counts after removed overlapped cnts
     print('after remove overlapped (label, counts): ', [(label, labels.count(label)) for label in set(labels)])
 
-    if do_draw:
+    if do_draw or True:
         img = drawer.blank_img()
         for label in set(labels):
             cnts = [cnt_dict['cnt'] for cnt_dict in cnt_dicts if cnt_dict['label'] == label]
             img = drawer.draw_same_color(cnts, img)
         drawer.save(img, '2_CombineGroups')
-
+    
     # =============================== 3. Count group obviousity factors ===================================
 
     group_dicts = []
     for label in set(labels):
         group_cnt_dicts = [cnt_dict for cnt_dict in cnt_dicts if cnt_dict['label'] == label]
-        if len(group_cnt_dicts) < 2:
+        if len(group_cnt_dicts) < 3:
             continue
 
         group_cnts = []
@@ -177,8 +177,12 @@ def main(i, img_path):
         factor_list = [group[factor] for group in group_dicts]
         
         # find obvious index
-        diff = np.diff(factor_list)
-        obvious_index = np.where(diff == max(diff))[0][0] + 1
+        if len(factor_list) == 1:
+            obvious_index = 0
+            thres = factor_list[0]
+        else:
+            diff = np.diff(factor_list)
+            obvious_index = np.where(diff == max(diff))[0][0] + 1
 
         # check cover_area
         if factor == 'area':
@@ -216,14 +220,14 @@ def main(i, img_path):
         for group in group_dicts[obvious_index:]:
             group['votes'] += 1
 
-        if do_draw:
+        if do_draw or True:
             img = drawer.blank_img()
             for group in group_dicts[obvious_index:]:
                 img = drawer.draw_same_color(group['group_cnts'], img, color=(0, 255, 0))  # green for obvious
             for group in group_dicts[:obvious_index]:
                 img = drawer.draw_same_color(group['group_cnts'], img, color=(0, 0, 255))  # red for others
             drawer.save(img, desc=f'4_Obvious_{factor}')
-
+        if do_draw:
             plt.bar(x=range(len(factor_list)), height=factor_list)
             plt.title(f'{factor} cut idx: {obvious_index} | threshold: {thres: .3f}')
             plt.savefig(f'{output_dir}{img_name}_4_Obvious_{factor}.png')

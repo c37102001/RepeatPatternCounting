@@ -11,8 +11,9 @@ class ContourDrawer:
         self.output_path = output_path
         self.img_name = img_name
         self.switchColor = cycle(
-            [(0, 255, 255), (128, 255, 255), (0, 0, 255), (0, 255, 0),
-             (0, 128, 0), (128, 128, 0), (255, 128, 0), (128, 255, 0)]
+            [(255, 255, 0), (255, 0, 255), (0, 255, 255), (255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 128, 0),
+               (255, 0, 128), (128, 0, 255), (128, 255, 0), (0, 128, 255), (0, 255, 128), (128, 128, 0), (128, 0, 128),
+               (0, 128, 128), (255, 64, 0), (255, 0, 64), (64, 255, 0), (64, 0, 255), (0, 255, 64), (0, 64, 255)]
         )
         self.do_mark = do_mark
 
@@ -25,20 +26,20 @@ class ContourDrawer:
         for index, c in enumerate(contours):
             cv2.drawContours(img, [c], -1, next(self.switchColor), 2)
             if self.do_mark:
-                img = self._do_mark(contours, img)
+                img = self.mark_number(contours, img)
         return img
     
-    def draw_same_color(self, contours, img=None, color=None):
+    def draw_same_color(self, contours, img=None, color=None, thickness=2):
         if img is None:
             img = self.blank_img()
         if color is None:
             color = next(self.switchColor)
-        img = cv2.drawContours(img, contours, -1, color, 2)
+        img = cv2.drawContours(img, contours, -1, color, thickness)
         if self.do_mark:
-            img = self._do_mark(contours, img)
+            img = self.mark_number(contours, img)
         return img
 
-    def _do_mark(self, contours, img):
+    def mark_number(self, contours, img):
         for index, c in enumerate(contours):
             peri = cv2.arcLength(c, True)
             approx = cv2.approxPolyDP(c, 0.01 * peri, True)

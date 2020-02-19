@@ -35,7 +35,7 @@ def get_contour_feature(color_img, contours, edge_type):
     # If pixel s of the contour is between 4-8 , then we take 4 as its dimension.
     factor_360 = [4, 8, 20, 40, 90, 180, 360]
 
-    most_cnt_len = len(contours[int(len(contours) * 0.8)])      # 248
+    most_cnt_len = cv2.arcLength(contours[int(len(contours) * 0.8)], closed=True)      # 248
     sample_number = min(factor_360, key=lambda factor: abs(factor - most_cnt_len))   # 360
     
     for contour in tqdm(contours, desc=f'[{edge_type}] Feature Extraction'):
@@ -75,8 +75,10 @@ def get_contour_feature(color_img, contours, edge_type):
         cnt_pixel_distances.append(pixel_distances)
         cnt_color_gradient.append(color_gradient)
 
-    max_size = len(max(contours, key=lambda x: len(x)))
-    cnt_norm_size = [[len(contour) / max_size] for contour in contours]
+    cnt_size = list(map(cv2.contourArea, contours))
+    max_size = max(cnt_size)
+    cnt_norm_size = [[size / max_size] for size in cnt_size]
+
     cnt_avg_lab = [FindCntAvgLAB(contour, color_img) for contour in contours]
 
     cnt_dic_list = [{

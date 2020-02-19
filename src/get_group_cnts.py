@@ -32,10 +32,10 @@ def get_group_cnts(drawer, edge_img, edge_type, do_enhance=True, do_draw=False):
     img_name = drawer.img_name
 
     if do_draw:
-        img_path = f'{output_path}{img_name}_1_{edge_type}-0_OriginEdge.jpg'
-        cv2.imwrite(img_path, edge_img)
+            desc = f'1_{edge_type}-0_OriginEdge'
+            drawer.save(edge_img, desc)
 
-    if do_enhance:  
+    if do_enhance:
         # Enhance edge
         if _gray_value_redistribution_local:
             clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(9, 9))
@@ -44,11 +44,14 @@ def get_group_cnts(drawer, edge_img, edge_type, do_enhance=True, do_draw=False):
             edge_img = cv2.equalizeHist(edge_img) # golbal equalization
 
         if do_draw:
-            img_path = f'{output_path}{img_name}_1_{edge_type}-1_EnhancedEdge.jpg'
-            cv2.imwrite(img_path, edge_img)
+            desc = f'1_{edge_type}-1_EnhancedEdge'
+            drawer.save(edge_img, desc)
 
     # threshold to 0 or 255
     edge_img = cv2.threshold(edge_img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
+    if do_draw or True:
+        desc = f'1_{edge_type}-1-1_Threshold'
+        drawer.save(edge_img, desc)
 
     # add edge on border
     edge_img = add_border_edge(edge_img)
@@ -67,24 +70,25 @@ def get_group_cnts(drawer, edge_img, edge_type, do_enhance=True, do_draw=False):
         if has_child == -1:
             inner_contours.append(contour)
     contours = inner_contours
+    
     print(f'[{edge_type}] # after removing overlapped: {len(contours)}')
     if do_draw:
         img = drawer.draw(contours)
         desc = f'1_{edge_type}-3_RemovedOuter'
         drawer.save(img, desc)
     
-    # filter contours by area, perimeter, solidity, edge_num
+    # filter contours by area, perimeter, convex property
     height, width = drawer.color_img.shape[:2]
-    contours = filter_contours(contours, height, width)
+    contours = filter_contours(contours, height, width, drawer)
     print(f'[{edge_type}] # after filtering: {len(contours)}')
-    if do_draw:
+    if do_draw or True:
         img = drawer.draw(contours)
         desc = f'1_{edge_type}-4_Filterd'
         drawer.save(img, desc)
-    
+
     # return if too less contours
-    if len(contours) <= 3:
-        print(f'[Warning] {edge_type} contours less than 3.')
+    if len(contours) <= 1:
+        print(f'[Warning] {edge_type} contours less than 1.')
         return []
 
     # Extract contour color, size, shape, color_gradient features
@@ -96,11 +100,12 @@ def get_group_cnts(drawer, edge_img, edge_type, do_enhance=True, do_draw=False):
     return groups_cnt_dicts
 
 
-def filter_contours(contours, re_height, re_width):
+def filter_contours(contours, re_height, re_width, drawer):
     MIN_PERIMETER = 100
     MAX_CNT_SIZE = 1 / 5
-    MIN_CNT_SIZE = 1 / 30000
+    MIN_CNT_SIZE = 1 / 15000
     MIN_AREA_OVER_LEN = 3
+    MIN_CONVEX_AREA_OVER_LEN = 10
     
     accept_contours = []
     for c in contours:
@@ -108,11 +113,39 @@ def filter_contours(contours, re_height, re_width):
         contour_area = cv2.contourArea(c)
         if perimeter < MIN_PERIMETER or perimeter > (re_height + re_width) * 2 / 3.0:
             continue
-        if contour_area < (re_height * re_width) * MIN_CNT_SIZE or contour_area > (re_height * re_width) * MAX_CNT_SIZE:
+        if not (re_height * re_width) * MIN_CNT_SIZE <= contour_area <= (re_height * re_width) * MAX_CNT_SIZE:
             continue
+
         if contour_area / perimeter < MIN_AREA_OVER_LEN:
-            continue
-        
+
+            convex = cv2.convexHull(c)
+            convex_area = cv2.contourArea(convex)
+            convex_peri = cv2.arcLength(convex, closed=True)
+            if not 1.5 <= perimeter / convex_peri <= 2.5:
+                continue
+            if convex_area / convex_peri < MIN_CONVEX_AREA_OVER_LEN:
+                continue
+
+            dists = [abs(cv2.pointPolygonTest(convex, tuple(point[0]), True)) for point in c]
+            cnt_points_in_convex = sum([1 for dist in dists if dist <= convex_peri * 0.01])
+            in_convex_precent = cnt_points_in_convex / len(c)
+            if in_convex_precent < 0.8:
+                continue
+            
+            # use convex as new contour
+            img = drawer.draw_same_color([convex], color=(255,255,255), thickness=1)
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            c = cv2.findContours(img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)[0][0]
+            
+        else:
+            approx = cv2.approxPolyDP(c, 0.01 * perimeter, True)
+            if len(approx) <= 2:
+                continue
+            if len(approx) <= 8:
+                img = drawer.draw_same_color([approx], color=(255,255,255), thickness=1)
+                img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+                c = cv2.findContours(img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)[0][0]
+
         accept_contours.append(c)
     
     return accept_contours
@@ -149,10 +182,6 @@ def cluster_features(contours, cnt_dicts, drawer, edge_type, do_draw=False):
         if combine_labels.count(combine_label) < 2:
             continue
 
-        # groups_cnt_dicts.append(
-        #     [cnt_dicts[i] for i, label in enumerate(combine_labels) if label == combine_label]
-        # )
-
         group_idx = [idx for idx, label in enumerate(combine_labels) if label == combine_label]
         group_cnt_dicts = [cnt_dicts[i] for i in group_idx]
         groups_cnt_dicts.append(group_cnt_dicts)
@@ -161,7 +190,7 @@ def cluster_features(contours, cnt_dicts, drawer, edge_type, do_draw=False):
         cnts = [contours[i] for i in group_idx]
         img = drawer.draw_same_color(cnts, img)
         
-    if do_draw:
+    if do_draw or True:
         desc = f'1_{edge_type}-6_GroupedResult'
         drawer.save(img, desc)
     

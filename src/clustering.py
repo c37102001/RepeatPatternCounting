@@ -6,6 +6,8 @@ from ipdb import set_trace as pdb
 AVG_NUM = 5
 
 def hierarchical_clustering(feature_list, feature_type, edge_type, drawer, do_draw=False):
+    if len(feature_list) <= 3:
+        return [0] * len(feature_list)
     
     # hierarchically link features by order of distance(measured by 'ward'), output a hierarchical tree
     # return ndarray sized [#feature_list-1, 4], 4 means (group idx1, gp idx2, gp_distance, included ele num)
