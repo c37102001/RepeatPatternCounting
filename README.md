@@ -60,3 +60,8 @@ for new version
 * 0219-1
   * [Important] change filter to approxPolyDP, convexHull
   * change area featrue extraction method from arcLength to contourArea
+
+* 0223
+  * add check overlap condition: any point inside the other contour
+  * araa obvious change to 0.25*largest area
+  * add morphological closing

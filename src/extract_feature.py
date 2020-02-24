@@ -35,8 +35,9 @@ def get_contour_feature(color_img, contours, edge_type):
     # If pixel s of the contour is between 4-8 , then we take 4 as its dimension.
     factor_360 = [4, 8, 20, 40, 90, 180, 360]
 
-    most_cnt_len = cv2.arcLength(contours[int(len(contours) * 0.8)], closed=True)      # 248
-    sample_number = min(factor_360, key=lambda factor: abs(factor - most_cnt_len))   # 360
+    # most_cnt_len = cv2.arcLength(contours[int(len(contours) * 0.8)], closed=True)      # 248
+    # sample_number = min(factor_360, key=lambda factor: abs(factor - most_cnt_len))   # 360
+    sample_number = 180
     
     for contour in tqdm(contours, desc=f'[{edge_type}] Feature Extraction'):
         pixel_features = []

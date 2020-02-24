@@ -3,6 +3,7 @@ import cv2
 import math
 from ipdb import set_trace as pdb
 import itertools
+from tqdm import tqdm
 
 
 def add_border_edge(edge_img):
@@ -39,6 +40,13 @@ def is_overlap(cnt1, cnt2):
     # check contains and similar size
     if c1c2D < min(c1D, c2D) and min(c1D, c2D) / max(c1D, c2D) > (2 / 3):
         return True
+
+    cnt1tocnt2 = [cv2.pointPolygonTest(cnt2, tuple(point[0]), False) for point in cnt1]
+    if cnt1tocnt2.count(1) > 0:
+        return True
+    cnt2tocnt1 = [cv2.pointPolygonTest(cnt1, tuple(point[0]), False) for point in cnt2]
+    if cnt2tocnt1.count(1) > 0:
+        return True
     
     return False
 
@@ -46,7 +54,7 @@ def is_overlap(cnt1, cnt2):
 def check_overlap(cnt_dicts):
     label_change_list = []
     # If 2 contours are overlapped, change the label of the less group to another label.
-    for i, dict_i in enumerate(cnt_dicts[:-1]):
+    for i, dict_i in tqdm(enumerate(cnt_dicts[:-1]), total=len(cnt_dicts[:-1]), desc='[Check overlap]'):
         for dict_j in cnt_dicts[i+1:]:
 
             if is_overlap(dict_i['cnt'], dict_j['cnt']):

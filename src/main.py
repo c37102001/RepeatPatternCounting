@@ -75,8 +75,8 @@ def main(i, img_path):
     resize_factor = resize_height / img_height
     resi_input_img = cv2.resize(input_img, (0, 0), fx=resize_factor, fy=resize_factor)
     drawer = ContourDrawer(resi_input_img, output_dir, img_name, do_mark=do_mark)
-    if do_draw or True:
-        cv2.imwrite(output_dir + img_name + '_0_original_image.jpg', resi_input_img)
+    if do_draw:
+        drawer.save(resi_input_img, '0_original_image')
 
 
     #===================================== 1. Get grouped contours  ===================================
@@ -120,7 +120,7 @@ def main(i, img_path):
     labels = [cnt_dict['label'] for cnt_dict in cnt_dicts]  # show labels and counts after removed overlapped cnts
     print('after remove overlapped (label, counts): ', [(label, labels.count(label)) for label in set(labels)])
 
-    if do_draw or True:
+    if do_draw:
         img = drawer.blank_img()
         for label in set(labels):
             cnts = [cnt_dict['cnt'] for cnt_dict in cnt_dicts if cnt_dict['label'] == label]
@@ -132,7 +132,7 @@ def main(i, img_path):
     group_dicts = []
     for label in set(labels):
         group_cnt_dicts = [cnt_dict for cnt_dict in cnt_dicts if cnt_dict['label'] == label]
-        if len(group_cnt_dicts) < 3:
+        if len(group_cnt_dicts) < 2:
             continue
 
         group_cnts = []
@@ -220,14 +220,14 @@ def main(i, img_path):
         for group in group_dicts[obvious_index:]:
             group['votes'] += 1
 
-        if do_draw or True:
+        if do_draw:
             img = drawer.blank_img()
             for group in group_dicts[obvious_index:]:
                 img = drawer.draw_same_color(group['group_cnts'], img, color=(0, 255, 0))  # green for obvious
             for group in group_dicts[:obvious_index]:
                 img = drawer.draw_same_color(group['group_cnts'], img, color=(0, 0, 255))  # red for others
             drawer.save(img, desc=f'4_Obvious_{factor}')
-        if do_draw:
+        
             plt.bar(x=range(len(factor_list)), height=factor_list)
             plt.title(f'{factor} cut idx: {obvious_index} | threshold: {thres: .3f}')
             plt.savefig(f'{output_dir}{img_name}_4_Obvious_{factor}.png')

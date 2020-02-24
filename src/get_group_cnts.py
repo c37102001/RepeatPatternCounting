@@ -49,10 +49,17 @@ def get_group_cnts(drawer, edge_img, edge_type, do_enhance=True, do_draw=False):
 
     # threshold to 0 or 255
     edge_img = cv2.threshold(edge_img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
-    if do_draw or True:
+    if do_draw:
         desc = f'1_{edge_type}-1-1_Threshold'
         drawer.save(edge_img, desc)
 
+    # morphology close
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
+    edge_img = cv2.morphologyEx(edge_img, cv2.MORPH_CLOSE, kernel)
+    if do_draw:
+        desc = f'1_{edge_type}-1-2_closeEdge'
+        drawer.save(edge_img, desc)    
+    
     # add edge on border
     edge_img = add_border_edge(edge_img)
 
@@ -63,14 +70,13 @@ def get_group_cnts(drawer, edge_img, edge_type, do_enhance=True, do_draw=False):
         img = drawer.draw(contours)
         desc = f'1_{edge_type}-2_OriginContour'
         drawer.save(img, desc)
-
+    
     # filter contours that has children (outer overlap contour)
     inner_contours = []
     for contour, has_child in zip(contours, hierarchy[0,:,2]):
         if has_child == -1:
             inner_contours.append(contour)
     contours = inner_contours
-    
     print(f'[{edge_type}] # after removing overlapped: {len(contours)}')
     if do_draw:
         img = drawer.draw(contours)
@@ -81,11 +87,11 @@ def get_group_cnts(drawer, edge_img, edge_type, do_enhance=True, do_draw=False):
     height, width = drawer.color_img.shape[:2]
     contours = filter_contours(contours, height, width, drawer)
     print(f'[{edge_type}] # after filtering: {len(contours)}')
-    if do_draw or True:
+    if do_draw:
         img = drawer.draw(contours)
         desc = f'1_{edge_type}-4_Filterd'
         drawer.save(img, desc)
-
+    
     # return if too less contours
     if len(contours) <= 1:
         print(f'[Warning] {edge_type} contours less than 1.')
@@ -108,16 +114,18 @@ def filter_contours(contours, re_height, re_width, drawer):
     MIN_CONVEX_AREA_OVER_LEN = 10
     
     accept_contours = []
-    for c in contours:
+    for i, c in enumerate(contours):
         perimeter = cv2.arcLength(c, closed=True)
         contour_area = cv2.contourArea(c)
         if perimeter < MIN_PERIMETER or perimeter > (re_height + re_width) * 2 / 3.0:
             continue
         if not (re_height * re_width) * MIN_CNT_SIZE <= contour_area <= (re_height * re_width) * MAX_CNT_SIZE:
             continue
-
+        approx = cv2.approxPolyDP(c, 0.01 * perimeter, True)
+        if len(approx) <= 2:
+            continue
+        
         if contour_area / perimeter < MIN_AREA_OVER_LEN:
-
             convex = cv2.convexHull(c)
             convex_area = cv2.contourArea(convex)
             convex_peri = cv2.arcLength(convex, closed=True)
@@ -136,18 +144,12 @@ def filter_contours(contours, re_height, re_width, drawer):
             img = drawer.draw_same_color([convex], color=(255,255,255), thickness=1)
             img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             c = cv2.findContours(img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)[0][0]
-            
-        else:
-            approx = cv2.approxPolyDP(c, 0.01 * perimeter, True)
-            if len(approx) <= 2:
-                continue
-            if len(approx) <= 8:
-                img = drawer.draw_same_color([approx], color=(255,255,255), thickness=1)
-                img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-                c = cv2.findContours(img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)[0][0]
 
         accept_contours.append(c)
-    
+
+    mean_area = sum([cv2.contourArea(c) for c in accept_contours]) / len(accept_contours)
+    accept_contours = filter(lambda c: cv2.contourArea(c) > mean_area * 0.6, accept_contours)
+    accept_contours = [*accept_contours]
     return accept_contours
 
 
@@ -179,8 +181,6 @@ def cluster_features(contours, cnt_dicts, drawer, edge_type, do_draw=False):
     img = drawer.blank_img()
     groups_cnt_dicts = []
     for combine_label in set(combine_labels):
-        if combine_labels.count(combine_label) < 2:
-            continue
 
         group_idx = [idx for idx, label in enumerate(combine_labels) if label == combine_label]
         group_cnt_dicts = [cnt_dicts[i] for i in group_idx]
@@ -190,7 +190,7 @@ def cluster_features(contours, cnt_dicts, drawer, edge_type, do_draw=False):
         cnts = [contours[i] for i in group_idx]
         img = drawer.draw_same_color(cnts, img)
         
-    if do_draw or True:
+    if do_draw:
         desc = f'1_{edge_type}-6_GroupedResult'
         drawer.save(img, desc)
     

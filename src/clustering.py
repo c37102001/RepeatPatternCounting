@@ -9,6 +9,11 @@ def hierarchical_clustering(feature_list, feature_type, edge_type, drawer, do_dr
     if len(feature_list) <= 3:
         return [0] * len(feature_list)
     
+    # avoid force clustering
+    if feature_type == 'size' and min(feature_list)[0] >= 0.75:
+        print(f'[{edge_type}] [{feature_type}] clustering all in one group!')
+        return [0] * len(feature_list)
+    
     # hierarchically link features by order of distance(measured by 'ward'), output a hierarchical tree
     # return ndarray sized [#feature_list-1, 4], 4 means (group idx1, gp idx2, gp_distance, included ele num)
     feature_dist_hierarchy = linkage(feature_list, 'ward')
