@@ -6,7 +6,7 @@ from ipdb import set_trace as pdb
 from tqdm import tqdm
 
 
-def get_contour_feature(color_img, contours, edge_type):
+def get_contour_feature(color_img, contours):
     ''' Extract contour color, size, shape, color_gradient features
 
     Args:
@@ -39,7 +39,7 @@ def get_contour_feature(color_img, contours, edge_type):
     # sample_number = min(factor_360, key=lambda factor: abs(factor - most_cnt_len))   # 360
     sample_number = 180
     
-    for contour in tqdm(contours, desc=f'[{edge_type}] Feature Extraction'):
+    for contour in tqdm(contours, desc='[Feature Extraction]'):
         pixel_features = []
         cM = get_centroid(contour)
 
@@ -126,9 +126,9 @@ def rotate_contour(pixel_features, main_angle):
     for i, f in enumerate(pixel_features):
         if f['distance'] == start_pixel['distance'] and \
            f['angle'] == start_pixel['angle'] and \
-           np.array_equal(f['coordinate'],start_pixel['coordinate']):
-            start_index = i
-            break
+           np.array_equal(f['coordinate'], start_pixel['coordinate']):
+           start_index = i
+           break
     
     # shift pixels order to make the starting pixel to the begining.
     pixel_features = pixel_features[start_index:] + pixel_features[:start_index]
@@ -174,14 +174,14 @@ def sample_by_angle(img, pixel_features, n_sample):
     pixel_coordinates = []
 
     # Output the color gradient of the sample points as an obviousity .
-    cnt_color_gradient = 0.0
+    cnt_color_gradient = []
 
     # use interpolat to complete the sample angle distance
     for i in range(len(sample_angles) - 1):
         pixel_distances.append(sample_pixels[i]['distance'])
         pixel_coordinates.append(sample_pixels[i]['coordinate'])
-        cnt_color_gradient += color_gradient_by_angle(img, sample_pixels[i]['coordinate'], sample_angles[i])
-
+        cnt_color_gradient.append(color_gradient_by_angle(img, sample_pixels[i]['coordinate'], sample_angles[i]))
+        
         for inter_angle in np.arange(sample_angles[i] + per_angle, sample_angles[i + 1], per_angle):
             inter_distance = dist_interpolation(
                 sample_angles[i], 
@@ -199,9 +199,9 @@ def sample_by_angle(img, pixel_features, n_sample):
                 inter_angle)
             pixel_coordinates.append(inter_coordinate)
             
-            cnt_color_gradient += color_gradient_by_angle(img, inter_coordinate, inter_angle)
+            cnt_color_gradient.append(color_gradient_by_angle(img, inter_coordinate, inter_angle))
 
-    cnt_color_gradient /= n_sample
+    cnt_color_gradient = sum(cnt_color_gradient) / len(cnt_color_gradient)
     
     return pixel_distances, pixel_coordinates, cnt_color_gradient
 
@@ -218,7 +218,7 @@ def corr_interpolation(a, a_d, b, b_d, i):
 def color_gradient_by_angle(img, coordinate, angle):
     '''Calculate the color gradient of the sample points.'''
 
-    img_lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+    img_lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB).astype(np.float32)
     img_l = img_lab[:, :, 0]
     img_a = img_lab[:, :, 1]
     img_b = img_lab[:, :, 2]

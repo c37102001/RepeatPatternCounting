@@ -5,13 +5,8 @@ from ipdb import set_trace as pdb
 
 AVG_NUM = 5
 
-def hierarchical_clustering(feature_list, feature_type, edge_type, drawer, do_draw=False):
+def hierarchical_clustering(feature_list, feature_type, drawer, do_draw=False):
     if len(feature_list) <= 3:
-        return [0] * len(feature_list)
-    
-    # avoid force clustering
-    if feature_type == 'size' and min(feature_list)[0] >= 0.75:
-        print(f'[{edge_type}] [{feature_type}] clustering all in one group!')
         return [0] * len(feature_list)
     
     # hierarchically link features by order of distance(measured by 'ward'), output a hierarchical tree
@@ -43,11 +38,24 @@ def hierarchical_clustering(feature_list, feature_type, edge_type, drawer, do_dr
     max_ratio = max(ratio_list)
     max_ratio_idx = ratio_list.index(max_ratio)
     if max_ratio < 2.0:
-        print(f'[{edge_type}] [{feature_type}] clustering all in one group! max_ratio:', max_ratio)
+        print(f'[{feature_type}] clustering all in one group! max_ratio:', max_ratio)
         return [0] * len(feature_list)
 
     # to find the 'target'(not always max) difference idx, plus one to max ratio idx
     target_diff_idx = max_ratio_idx + 1
+
+    if feature_type == 'color':
+        THRES = 80
+    if feature_type == 'size':
+        THRES = 0.5
+    if feature_type == 'shape':
+        THRES = 2
+    while target_diff_idx < len(diff_list) and diff_list[target_diff_idx] < THRES:
+        target_diff_idx += 1
+    if target_diff_idx == len(diff_list):
+        print(f'[{feature_type}] clustering all in one group! max_ratio:', max_ratio)
+        return [0] * len(feature_list)
+    
     target_diff = diff_list[target_diff_idx]
 
     # by distance[dist_idx] and distance[dist_idx+1], we get difference[dist_idx(=diff_idx)]
@@ -59,7 +67,7 @@ def hierarchical_clustering(feature_list, feature_type, edge_type, drawer, do_dr
     if do_draw:
         plt.bar(x=range(len(diff_list)), height=diff_list)
         plt.title(f'{feature_type} cut idx: {target_diff_idx} | value: {target_diff:.3f} | ratio: {max_ratio:.3f}')
-        save_path = f'{drawer.output_path}{drawer.img_name}_1_{edge_type}-5b_{feature_type}.png'
+        save_path = f'{drawer.output_path}{drawer.img_name}_2-1_{feature_type.capitalize()}Group.png'
         plt.savefig(save_path)
         plt.close()
 

@@ -13,8 +13,9 @@ from ipdb import set_trace as pdb
 
 from canny import canny_edge_detect
 from drawer import ContourDrawer
-from get_group_cnts import get_group_cnts
-from utils import check_overlap, count_avg_gradient, evaluate_detection_performance
+from get_group_cnts import get_contours, cluster_features
+from extract_feature import get_contour_feature
+from utils import remove_overlap, count_avg_gradient, evaluate_detection_performance
 
 parser = ArgumentParser()
 parser.add_argument('--test_all', action='store_true', help='test all images in image dir')
@@ -74,14 +75,14 @@ def main(i, img_path):
     # resize_height=736, shape: (1365, 2048, 3) -> (736,1104,3)
     resize_factor = resize_height / img_height
     resi_input_img = cv2.resize(input_img, (0, 0), fx=resize_factor, fy=resize_factor)
-    drawer = ContourDrawer(resi_input_img, output_dir, img_name, do_mark=do_mark)
+    drawer = ContourDrawer(resi_input_img.copy(), output_dir, img_name, do_mark=do_mark)
     if do_draw:
-        drawer.save(resi_input_img, '0_original_image')
+        drawer.save(resi_input_img.copy(), '0_original_image')
 
 
     #===================================== 1. Get grouped contours  ===================================
     
-    groups_cnt_dicts = []
+    contours = []
     for edge_type in use_edge:
         edge_type = edge_type.strip()
         edge_dir, img_extension, do_enhance = img_cfg[edge_type].split(',')
@@ -89,7 +90,7 @@ def main(i, img_path):
         
         # get edge image
         if edge_type == 'Canny':
-            edge_img = canny_edge_detect(resi_input_img)
+            edge_img = canny_edge_detect(resi_input_img.copy())
         else:
             edge_path = edge_dir.strip() + img_name + img_extension.strip()
             if not os.path.isfile(edge_path):
@@ -98,11 +99,21 @@ def main(i, img_path):
             edge_img = cv2.imread(edge_path, cv2.IMREAD_GRAYSCALE)
             edge_img = cv2.resize(edge_img, (0, 0), fx=resize_factor, fy=resize_factor)     # shape: (736, *)
 
-        # filter and group contours
-        _groups_cnt_dicts = get_group_cnts(drawer, edge_img, edge_type, do_enhance, do_draw)
-        groups_cnt_dicts.extend(_groups_cnt_dicts)
+        # find and filter contours
+        contours.extend(get_contours(drawer, edge_img, edge_type, do_enhance, do_draw))
+    
+    contours = remove_overlap(contours)
+    if do_draw:
+        img = drawer.draw(contours)
+        drawer.save(img, '1-5_RemoveOverlap')
     
     # ============================== 2. Remove group overlap and combine ==============================
+    
+    # Extract contour features
+    cnt_dicts = get_contour_feature(resi_input_img.copy(), contours)
+    
+    # cluster contours into groups
+    groups_cnt_dicts = cluster_features(contours, cnt_dicts, drawer, do_draw)
     
     # add label and group weight(num of cnts in the group) into contour dictionary
     for i, group_cnt_dicts in enumerate(groups_cnt_dicts):
@@ -113,19 +124,7 @@ def main(i, img_path):
     # flatten to a list of contour dict
     cnt_dicts = [group_cnt_dict for group_cnt_dicts in groups_cnt_dicts for group_cnt_dict in group_cnt_dicts]
     labels = [cnt_dict['label'] for cnt_dict in cnt_dicts]  # show original labels and counts
-    print('before remove overlapped (label, counts): ', [(label, labels.count(label)) for label in set(labels)])
-
-    # check overlapped cnts and change their labels or remove them
-    cnt_dicts = check_overlap(cnt_dicts)
-    labels = [cnt_dict['label'] for cnt_dict in cnt_dicts]  # show labels and counts after removed overlapped cnts
     print('after remove overlapped (label, counts): ', [(label, labels.count(label)) for label in set(labels)])
-
-    if do_draw:
-        img = drawer.blank_img()
-        for label in set(labels):
-            cnts = [cnt_dict['cnt'] for cnt_dict in cnt_dicts if cnt_dict['label'] == label]
-            img = drawer.draw_same_color(cnts, img)
-        drawer.save(img, '2_CombineGroups')
     
     # =============================== 3. Count group obviousity factors ===================================
 
@@ -169,9 +168,9 @@ def main(i, img_path):
 
         # count whole image avg color gradient and put into group_dicts
         if factor == 'color_gradient':
-            avg_color_gradient = count_avg_gradient(resi_input_img)
+            avg_color_gradient = count_avg_gradient(resi_input_img.copy())
             group_dicts.append({'color_gradient': avg_color_gradient, 'votes': -1, 'group_cnts': []})
-
+            
         # sorting by factor from small to large
         group_dicts.sort(key=lambda group_dict: group_dict[factor], reverse=False)
         factor_list = [group[factor] for group in group_dicts]

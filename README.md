@@ -61,7 +61,11 @@ for new version
   * [Important] change filter to approxPolyDP, convexHull
   * change area featrue extraction method from arcLength to contourArea
 
-* 0223
+* 0224-1
   * add check overlap condition: any point inside the other contour
-  * araa obvious change to 0.25*largest area
+  * area obvious change to 0.25*largest area
   * add morphological closing
+
+* 0224-2
+  * [Important] change pipeline to combine contours first, then remove extract features and group.
+  * [Important] add clustering threshold

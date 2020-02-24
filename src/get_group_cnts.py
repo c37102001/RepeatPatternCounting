@@ -9,7 +9,7 @@ from ipdb import set_trace as pdb
 _gray_value_redistribution_local = True
 
 
-def get_group_cnts(drawer, edge_img, edge_type, do_enhance=True, do_draw=False):
+def get_contours(drawer, edge_img, edge_type, do_enhance=True, do_draw=False):
     ''' Do contour detection, filter contours, feature extract and cluster.
 
     Args:
@@ -96,14 +96,8 @@ def get_group_cnts(drawer, edge_img, edge_type, do_enhance=True, do_draw=False):
     if len(contours) <= 1:
         print(f'[Warning] {edge_type} contours less than 1.')
         return []
-
-    # Extract contour color, size, shape, color_gradient features
-    cnt_dicts = get_contour_feature(drawer.color_img, contours, edge_type)
     
-    # cluster cnts into groups
-    groups_cnt_dicts = cluster_features(contours, cnt_dicts, drawer, edge_type, do_draw)
-    
-    return groups_cnt_dicts
+    return contours
 
 
 def filter_contours(contours, re_height, re_width, drawer):
@@ -117,18 +111,18 @@ def filter_contours(contours, re_height, re_width, drawer):
     for i, c in enumerate(contours):
         perimeter = cv2.arcLength(c, closed=True)
         contour_area = cv2.contourArea(c)
+        approx = cv2.approxPolyDP(c, 0.01 * perimeter, True)
+        convex = cv2.convexHull(c)
+        convex_area = cv2.contourArea(convex)
+        convex_peri = cv2.arcLength(convex, closed=True)
         if perimeter < MIN_PERIMETER or perimeter > (re_height + re_width) * 2 / 3.0:
             continue
         if not (re_height * re_width) * MIN_CNT_SIZE <= contour_area <= (re_height * re_width) * MAX_CNT_SIZE:
             continue
-        approx = cv2.approxPolyDP(c, 0.01 * perimeter, True)
         if len(approx) <= 2:
             continue
         
         if contour_area / perimeter < MIN_AREA_OVER_LEN:
-            convex = cv2.convexHull(c)
-            convex_area = cv2.contourArea(convex)
-            convex_peri = cv2.arcLength(convex, closed=True)
             if not 1.5 <= perimeter / convex_peri <= 2.5:
                 continue
             if convex_area / convex_peri < MIN_CONVEX_AREA_OVER_LEN:
@@ -144,16 +138,21 @@ def filter_contours(contours, re_height, re_width, drawer):
             img = drawer.draw_same_color([convex], color=(255,255,255), thickness=1)
             img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             c = cv2.findContours(img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)[0][0]
+        
+        else:
+            img = drawer.draw_same_color([c], color=(255,255,255), thickness=1)
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            c = cv2.findContours(img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)[0][0]
 
         accept_contours.append(c)
-
-    mean_area = sum([cv2.contourArea(c) for c in accept_contours]) / len(accept_contours)
-    accept_contours = filter(lambda c: cv2.contourArea(c) > mean_area * 0.6, accept_contours)
+    
+    median_area = np.median([cv2.contourArea(c) for c in accept_contours])
+    accept_contours = filter(lambda c: cv2.contourArea(c) > median_area * 0.6, accept_contours)
     accept_contours = [*accept_contours]
     return accept_contours
 
 
-def cluster_features(contours, cnt_dicts, drawer, edge_type, do_draw=False):
+def cluster_features(contours, cnt_dicts, drawer, do_draw=False):
 
     # Do hierarchicalclustering by shape, color, and size
     label_dict = {}
@@ -161,7 +160,8 @@ def cluster_features(contours, cnt_dicts, drawer, edge_type, do_draw=False):
         feature_list = [cnt_dic[feature_type] for cnt_dic in cnt_dicts]
 
         # ndarray e.g. ([1, 1, 1, 1, 1, 3, 3, 2, 2, 2]), len=#feature_list
-        labels = hierarchical_clustering(feature_list, feature_type, edge_type, drawer, do_draw)
+        labels = hierarchical_clustering(feature_list, feature_type, drawer, do_draw)
+        print(f'{feature_type}:\t{labels}')
         label_dict[feature_type] = labels
 
         if do_draw:
@@ -169,7 +169,7 @@ def cluster_features(contours, cnt_dicts, drawer, edge_type, do_draw=False):
             for label in set(labels):
                 cnt_dic_list_by_groups = [c for i, c in enumerate(contours) if labels[i] == label]
                 img = drawer.draw_same_color(cnt_dic_list_by_groups, img)
-            desc = f'1_{edge_type}-5a_{feature_type.capitalize()}Group'
+            desc = f'2-1_{feature_type.capitalize()}Group'
             drawer.save(img, desc)
 
     # combine the label clustered by size, shape, and color. ex: (0,1,1), (2,0,1)
@@ -191,7 +191,7 @@ def cluster_features(contours, cnt_dicts, drawer, edge_type, do_draw=False):
         img = drawer.draw_same_color(cnts, img)
         
     if do_draw:
-        desc = f'1_{edge_type}-6_GroupedResult'
+        desc = f'2-2_GroupedResult'
         drawer.save(img, desc)
     
     return groups_cnt_dicts
