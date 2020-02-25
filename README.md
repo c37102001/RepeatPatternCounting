@@ -69,3 +69,8 @@ for new version
 * 0224-2
   * [Important] change pipeline to combine contours first, then remove extract features and group.
   * [Important] add clustering threshold
+
+* 0225-1
+  * [Important] remove img_avg_color_gradient from obvisity filter
+  * [Important] add "empirical" clustering threshold
+  * add remove size outliers

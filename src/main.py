@@ -13,9 +13,10 @@ from ipdb import set_trace as pdb
 
 from canny import canny_edge_detect
 from drawer import ContourDrawer
-from get_group_cnts import get_contours, cluster_features
-from extract_feature import get_contour_feature
-from utils import remove_overlap, count_avg_gradient, evaluate_detection_performance
+from get_contours import get_contours
+from get_features import get_features
+from get_clusters import get_clusters
+from utils import remove_overlap, remove_outliers, count_avg_gradient, evaluate_detection_performance
 
 parser = ArgumentParser()
 parser.add_argument('--test_all', action='store_true', help='test all images in image dir')
@@ -41,17 +42,24 @@ if args.test_all:
     img_list = os.listdir(input_dir)
 else:
     img_list = img_cfg['img_list'].split(',')
-resize_height = img_cfg.getfloat('resize_height')
+resize_height = eval(img_cfg['resize_height'])
 use_edge = img_cfg['use_edge'].split(',')
+
+# filter contour config
+filter_cfg = cfg['filter_cfg']
+
+# cluster config
+cluster_cfg = cfg['cluster_cfg']
 
 # obviousity thresold config
 obvs_cfg = cfg['obviousity_cfg']
-area_thres = obvs_cfg.getfloat('area_thres')
-solidity_thres = obvs_cfg.getfloat('solidity_thres')
+area_thres = eval(obvs_cfg['area_thres'])
+solidity_thres = eval(obvs_cfg['solidity_thres'])
+gradient_thres = eval(obvs_cfg['gradient_thres'])
 
 # evaluate config
 eval_cfg = cfg['evaluate']
-evaluate = eval_cfg.getboolean('evaluate')
+evaluate = eval(eval_cfg['evaluate'])
 evaluation_csv = eval_cfg['evaluation_csv'].split(',')
 
 
@@ -80,7 +88,7 @@ def main(i, img_path):
         drawer.save(resi_input_img.copy(), '0_original_image')
 
 
-    #===================================== 1. Get grouped contours  ===================================
+    #================================ 1. Get and filter contours  ===================================
     
     contours = []
     for edge_type in use_edge:
@@ -100,20 +108,26 @@ def main(i, img_path):
             edge_img = cv2.resize(edge_img, (0, 0), fx=resize_factor, fy=resize_factor)     # shape: (736, *)
 
         # find and filter contours
-        contours.extend(get_contours(drawer, edge_img, edge_type, do_enhance, do_draw))
+        contours.extend(get_contours(filter_cfg, drawer, edge_img, edge_type, do_enhance, do_draw))
     
+    # Remove overlap
     contours = remove_overlap(contours)
-    if do_draw:
+    print(f'[Remove overlap] # after removing overlaps: {len(contours)}')
+    if do_draw or True:
         img = drawer.draw(contours)
         drawer.save(img, '1-5_RemoveOverlap')
+
+    # Remove outliers
+    contours = remove_outliers(contours)
+    print(f'[Remove size outliers] # after removing outliers: {len(contours)}')
     
-    # ============================== 2. Remove group overlap and combine ==============================
-    
-    # Extract contour features
-    cnt_dicts = get_contour_feature(resi_input_img.copy(), contours)
+    # =================== 2. Get contour features and cluster =========================
+
+    # Get contour features
+    cnt_dicts = get_features(resi_input_img.copy(), contours)
     
     # cluster contours into groups
-    groups_cnt_dicts = cluster_features(contours, cnt_dicts, drawer, do_draw)
+    groups_cnt_dicts = get_clusters(cluster_cfg, contours, cnt_dicts, drawer, do_draw)
     
     # add label and group weight(num of cnts in the group) into contour dictionary
     for i, group_cnt_dicts in enumerate(groups_cnt_dicts):
@@ -124,7 +138,7 @@ def main(i, img_path):
     # flatten to a list of contour dict
     cnt_dicts = [group_cnt_dict for group_cnt_dicts in groups_cnt_dicts for group_cnt_dict in group_cnt_dicts]
     labels = [cnt_dict['label'] for cnt_dict in cnt_dicts]  # show original labels and counts
-    print('after remove overlapped (label, counts): ', [(label, labels.count(label)) for label in set(labels)])
+    print('[Cluster results] (label, counts): ', [(label, labels.count(label)) for label in set(labels)])
     
     # =============================== 3. Count group obviousity factors ===================================
 
@@ -161,60 +175,28 @@ def main(i, img_path):
             'votes': 0,
         })
 
-    # ================================= 4. Vote groups by obviousity =====================================
+    # ================================= 4. Obviousity voting =====================================
 
-    obvious_factors = ['area', 'solidity', 'color_gradient']
-    for factor in obvious_factors:
-
-        # count whole image avg color gradient and put into group_dicts
-        if factor == 'color_gradient':
-            avg_color_gradient = count_avg_gradient(resi_input_img.copy())
-            group_dicts.append({'color_gradient': avg_color_gradient, 'votes': -1, 'group_cnts': []})
+    factors = ['area', 'solidity', 'color_gradient']
+    thres_params = [area_thres, solidity_thres, gradient_thres]
+    for factor, thres_param in zip(factors, thres_params):
             
         # sorting by factor from small to large
         group_dicts.sort(key=lambda group_dict: group_dict[factor], reverse=False)
         factor_list = [group[factor] for group in group_dicts]
         
-        # find obvious index
         if len(factor_list) == 1:
             obvious_index = 0
-            thres = factor_list[0]
         else:
             diff = np.diff(factor_list)
             obvious_index = np.where(diff == max(diff))[0][0] + 1
+        obvious_value = factor_list[obvious_index]
 
-        # check cover_area
-        if factor == 'area':
-            obvious_area = factor_list[obvious_index]
-            for i in range(obvious_index-1, -1, -1):
-                area = factor_list[i]
-                thres = obvious_area * area_thres
-                if area > thres:     # include closed area factor
-                    obvious_area = area
-                    obvious_index = i
-        
-        # check solidity factor
-        elif factor == 'solidity':
-            obvious_solidity = factor_list[obvious_index]
-            thres = obvious_solidity * solidity_thres
-            for i, solidity_factor in enumerate(factor_list[:obvious_index]):
-                if solidity_factor > thres:   # include closed solidity factor
-                    obvious_index = i
-                    break
-        
-        # check color gradient
-        elif factor == 'color_gradient':
-            avg_gradient_idx = next(i for i, d in enumerate(group_dicts) if d['votes'] == -1)
-            # if avg largar than all obvious, set obvs_idx=len so no one gets vote
-            if avg_gradient_idx == len(group_dicts) - 1:    
-                obvious_index = len(group_dicts)
-                thres = avg_color_gradient
-                print('Every color gradient is less than average gradient.')
-            
-            # else those obvious who is larger than avg gets vote
-            else:
-                obvious_index = max(obvious_index, avg_gradient_idx + 1)
-                thres = factor_list[obvious_index]
+        thres = obvious_value * thres_param
+        for i, factor_value in enumerate(factor_list[:obvious_index]):
+            if factor_value > thres:
+                obvious_index = i
+                break
 
         for group in group_dicts[obvious_index:]:
             group['votes'] += 1
@@ -231,10 +213,6 @@ def main(i, img_path):
             plt.title(f'{factor} cut idx: {obvious_index} | threshold: {thres: .3f}')
             plt.savefig(f'{output_dir}{img_name}_4_Obvious_{factor}.png')
             plt.close()
-
-        # remove avg color gradient from group_dicts
-        if factor == 'color_gradient':
-            group_dicts.remove({'color_gradient': avg_color_gradient, 'votes': -1, 'group_cnts': []})
     
     # ============================ 5. Choose groups with most votes ==================================
 
@@ -243,7 +221,7 @@ def main(i, img_path):
     most_votes = most_votes_group['votes']
     for group in group_dicts:
         # TODO can further specify accept 2 when the loss weight is from color
-        if group['votes'] >= min(2, most_votes):
+        if group['votes'] == most_votes:
             obvious_groups.append(group)
 
     # contours with same label

@@ -67,6 +67,19 @@ def remove_overlap(contours):
     return keep_contours
 
 
+def remove_outliers(contours, m=3):
+    outlier_idx = []
+
+    sizes = np.array([cv2.contourArea(c) for c in contours])
+    mean = np.mean(sizes)
+    std = np.std(sizes)
+    
+    outlier_idx = np.where((abs(sizes - mean)/ std) > m)[0].tolist()
+    keep_idx = [i for i in range(len(contours)) if i not in outlier_idx]
+    keep_contours = [contours[idx] for idx in keep_idx]
+
+    return keep_contours
+
 def count_avg_gradient(img, model='lab'):
     # Count the average gardient of the whole image
 

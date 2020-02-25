@@ -29,13 +29,13 @@ class ContourDrawer:
                 img = self.mark_number(contours, img)
         return img
     
-    def draw_same_color(self, contours, img=None, color=None, thickness=2):
+    def draw_same_color(self, contours, img=None, color=None, thickness=2, do_mark=True):
         if img is None:
             img = self.blank_img()
         if color is None:
             color = next(self.switchColor)
         img = cv2.drawContours(img, contours, -1, color, thickness)
-        if self.do_mark:
+        if self.do_mark and do_mark:
             img = self.mark_number(contours, img)
         return img
 

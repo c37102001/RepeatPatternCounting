@@ -6,7 +6,7 @@ from ipdb import set_trace as pdb
 from tqdm import tqdm
 
 
-def get_contour_feature(color_img, contours):
+def get_features(color_img, contours):
     ''' Extract contour color, size, shape, color_gradient features
 
     Args:
@@ -39,7 +39,7 @@ def get_contour_feature(color_img, contours):
     # sample_number = min(factor_360, key=lambda factor: abs(factor - most_cnt_len))   # 360
     sample_number = 180
     
-    for contour in tqdm(contours, desc='[Feature Extraction]'):
+    for contour in tqdm(contours, desc='[Get features]'):
         pixel_features = []
         cM = get_centroid(contour)
 
@@ -67,8 +67,6 @@ def get_contour_feature(color_img, contours):
 
         # rotate contour pixels to fit main angle and re-calculate pixels' angle.
         pixel_features = rotate_contour(pixel_features, main_angle)
-
-        # ------------edit to here-------------
 
         pixel_distances, pixel_coordinates, color_gradient = \
             sample_by_angle(color_img, pixel_features, sample_number)
