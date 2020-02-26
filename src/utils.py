@@ -3,32 +3,31 @@ import cv2
 import math
 from ipdb import set_trace as pdb
 import itertools
+from tqdm import tqdm
 
 
-def remove_overlap(contours, keep):
-    # sort from min to max
-    contours.sort(key=lambda x: len(x), reverse=False)
-    overlap_idx = []
+def add_border_edge(edge_img):
+    edge_img[0] = 255       # first row
+    edge_img[-1] = 255      # last row
+    edge_img[:, 0] = 255    # first column
+    edge_img[:, -1] = 255   # last column
+    return edge_img
 
-    for i, cnt1 in enumerate(contours[:-1]):
-        for j, cnt2 in enumerate(contours[i+1: ], start=i+1):
-            if is_overlap(cnt1, cnt2):
-                if keep == 'inner':
-                    overlap_idx.append(j)
-                if keep == 'outer':
-                    overlap_idx.append(i)
 
-    # # old version (keep inner)
-    # for small_idx, (cnt1, cnt2) in enumerate(zip(contours[:-1], contours[1:])):
-    #     if is_overlap(cnt1, cnt2):
-    #         overlap_idx.append(small_idx + 1)
-    
-    overlap_idx = list(set(overlap_idx))
-    keep_idx = [i for i in range(len(contours)) if i not in overlap_idx]
-    keep_contours = [contours[idx] for idx in keep_idx]
-    discard_contours = [contours[idx] for idx in overlap_idx]
-    
-    return keep_contours, discard_contours
+def get_centroid(cnt):
+    M = cv2.moments(cnt)
+    cx = int(M['m10'] / M['m00'])
+    cy = int(M['m01'] / M['m00'])
+    return cx, cy
+
+
+def eucl_distance(a, b):
+    if type(a) != np.ndarray:
+        a = np.array(a)
+    if type(b) != np.ndarray:
+        b = np.array(b)
+
+    return np.linalg.norm(a - b)
 
 
 def is_overlap(cnt1, cnt2):
@@ -41,57 +40,45 @@ def is_overlap(cnt1, cnt2):
     # check contains and similar size
     if c1c2D < min(c1D, c2D) and min(c1D, c2D) / max(c1D, c2D) > (2 / 3):
         return True
+
+    cnt1tocnt2 = [cv2.pointPolygonTest(cnt2, tuple(point[0]), False) for point in cnt1]
+    if cnt1tocnt2.count(1) > 0:
+        return True
+    cnt2tocnt1 = [cv2.pointPolygonTest(cnt1, tuple(point[0]), False) for point in cnt2]
+    if cnt2tocnt1.count(1) > 0:
+        return True
     
     return False
 
-def check_overlap(cnt_dicts):
-    label_change_list = []
-    # If 2 contours are overlapped, change the label of the less group to another label.
-    for i, dict_i in enumerate(cnt_dicts[:-1]):
-        for dict_j in cnt_dicts[i+1:]:
+def remove_overlap(contours):
+    # sort from min to max
+    contours.sort(key=lambda x: cv2.contourArea(x), reverse=False)
+    overlap_idx = []
 
-            if is_overlap(dict_i['cnt'], dict_j['cnt']):
-                if dict_i['group_weight'] > dict_j['group_weight']:
-                    dict_j['group_weight'] = 0
-                    label_change_list.append((dict_j['label'], dict_i['label']))
-                else:
-                    dict_i['group_weight'] = 0
-                    label_change_list.append((dict_i['label'], dict_j['label']))
+    for i, cnt1 in tqdm(enumerate(contours[:-1]), total=len(contours[:-1]), desc='[Remove overlap]'):
+        for j, cnt2 in enumerate(contours[i+1: ], start=i+1):
+            if is_overlap(cnt1, cnt2):
+                overlap_idx.append(j)
     
-    # check if overlap contours are same contour , if true makes them same label
-    label_group_change = []
-    label_list = [x['label'] for x in cnt_dicts]
-    for (less_label, more_label) in set(label_change_list):
-        overlap_times = label_change_list.count((less_label, more_label))
-        less_weight = label_list.count(less_label)
-        if overlap_times >= 0.5 * less_weight:          # 0.5 Changeable
-            found = False
-            for label_group in label_group_change:
-                if less_label in label_group:
-                    found = True
-                    label_group.append(more_label)
-                if more_label in label_group:
-                    found = True
-                    label_group.insert(0, less_label)
+    overlap_idx = list(set(overlap_idx))
+    keep_idx = [i for i in range(len(contours)) if i not in overlap_idx]
+    keep_contours = [contours[idx] for idx in keep_idx]
+    
+    return keep_contours
 
-            if not found:
-                label_group_change.append([less_label, more_label])
 
-    label_change_dic = {}
-    for label_group in label_group_change:
-        most_label = label_group[-1]
-        for label in label_group:
-            label_change_dic[label] = most_label
+def remove_outliers(contours, m=3):
+    outlier_idx = []
 
-    checked_list = []
-    for cnt_dic in cnt_dicts:
-        if cnt_dic['group_weight'] > 0:
-            if cnt_dic['label'] in label_change_dic:
-                cnt_dic['label'] = label_change_dic[cnt_dic['label']]
-            checked_list.append(cnt_dic)
+    sizes = np.array([cv2.contourArea(c) for c in contours])
+    mean = np.mean(sizes)
+    std = np.std(sizes)
+    
+    outlier_idx = np.where((abs(sizes - mean)/ std) > m)[0].tolist()
+    keep_idx = [i for i in range(len(contours)) if i not in outlier_idx]
+    keep_contours = [contours[idx] for idx in keep_idx]
 
-    return checked_list
-
+    return keep_contours
 
 def count_avg_gradient(img, model='lab'):
     # Count the average gardient of the whole image
@@ -119,19 +106,6 @@ def count_avg_gradient(img, model='lab'):
         
     return avg_gradient
 
-def get_centroid(cnt):
-    M = cv2.moments(cnt)
-    cx = int(M['m10'] / M['m00'])
-    cy = int(M['m01'] / M['m00'])
-    return cx, cy
-
-def eucl_distance(a, b):
-    if type(a) != np.ndarray:
-        a = np.array(a)
-    if type(b) != np.ndarray:
-        b = np.array(b)
-
-    return np.linalg.norm(a - b)
 
 def evaluate_detection_performance(img, fileName, final_group_cnt, resize_ratio, evaluate_csv_path):
     '''
@@ -205,6 +179,7 @@ def evaluate_detection_performance(img, fileName, final_group_cnt, resize_ratio,
     print(program_count, groundtruth_count)
     return tp, fp, fn, pr, re, fm, er
     # _____________________1 st evaluation end__________________________________________________
+
 
 def Get_Cnt_Area_Coordinate(img, final_group_cnt):
     '''

@@ -6,3 +6,9 @@ input/*
 src/test.py
 .vscode/launch.json
 sync/*
+mission/*
+PoolNet
+exp
+HED/pretrained/network-bsds500.pytorch
+RCF/pretrained/RCFcheckpoint_epoch12.pth
+RCF/pretrained/vgg16convs.mat
