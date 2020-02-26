@@ -85,7 +85,7 @@ def get_contours(filter_cfg, drawer, edge_img, edge_type, do_enhance=True, do_dr
     height, width = drawer.color_img.shape[:2]
     contours = filter_contours(filter_cfg, contours, height, width, drawer)
     print(f'[{edge_type}] # after filtering: {len(contours)}')
-    if do_draw:
+    if do_draw or True:
         img = drawer.draw(contours)
         desc = f'1_{edge_type}-4_Filterd'
         drawer.save(img, desc)

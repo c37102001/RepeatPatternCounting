@@ -2,29 +2,38 @@
 
 
 ## Preparation
-(Images are available from https://ppt.cc/ffLrKx)
-
+Images are available from https://ppt.cc/ffLrKx
 * put color imgs(det_imgs) in `input/image/`
 * put structure forest edge imgs(det_edges) in `input/edge_image/`
 * put HED edge imgs(hed_edges) in `input/hed_edge_image/`
+* put RCF edge imgs(rcf_edges) in `input/rcf_edge_image/`
 * put saliency imgs (saliency_maps) in `input/saliency_image/`
 * modify configs in `config.ini`
 
+HED, RCF pretrained models are available from https://ppt.cc/fzN82x
+* download `HED/network-bsds500.pytorch` model and put it in `HED/pretrained/`
+* download `RCF/RCFcheckpoint_epoch12.pth` model and put it in `RCF/pretrained/`
+* download `RCF/vgg16convs.mat` model and put it in `RCF/pretrained/`
+
 
 ## How to run
-for old version
+For old version
 * `cd legacy_code` and run `python find_repeat_pattern.py`
 
-for new version
+For new version
 * `cd src`
 * if test one to several pictures:
     1. modify `img_list` in config.ini like `img_list = IMG_ (39).jpg, IMG_ (10).jpg, IMG_ (16).jpg`
     2. run `python main.py`
 * if test all images in a folder:
-    1. modify `input_dir`, `strct_edge_dir` and `hed_edge_dir` in config.ini
-    2. run `python main.py --test_all`
-* add `--draw` if want to draw all process pictures 
-* add `--mark` if want to see every contour number in plots
+    1. run `python main.py --test_all`
+* add `--draw` to draw all process images
+* add `--mark` to plot contour numbers in images
+
+To obtain HED (and RCF) edge images:
+* cd `HED`
+* modify IMG_DIR, OUTPUT_DIR in `run_hed.py` (and test.lst or test_all.lst for RCF)
+* run `python run_hed.py`
 
 
 ## Update
@@ -74,3 +83,8 @@ for new version
   * [Important] remove img_avg_color_gradient from obvisity filter
   * [Important] add "empirical" clustering threshold
   * add remove size outliers
+
+* 0226-1
+  * [Important] add HED and RCF edges
+  * [Important] set cluster threshold to absolute value
+  * cancel size outlier removal

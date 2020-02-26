@@ -117,9 +117,9 @@ def main(i, img_path):
         img = drawer.draw(contours)
         drawer.save(img, '1-5_RemoveOverlap')
 
-    # Remove outliers
-    contours = remove_outliers(contours)
-    print(f'[Remove size outliers] # after removing outliers: {len(contours)}')
+    # # Remove outliers
+    # contours = remove_outliers(contours)
+    # print(f'[Remove size outliers] # after removing outliers: {len(contours)}')
     
     # =================== 2. Get contour features and cluster =========================
 
