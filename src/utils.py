@@ -83,6 +83,14 @@ def remove_outliers(contours, m=3):
 
 def remove_group_overlap(cnt_dicts, drawer):
     label_change_list = []
+
+    labels = [cnt_dict['label'] for cnt_dict in cnt_dicts]
+    label_area = {}
+    for label in set(labels):
+        area = [cv2.contourArea(cnt_dict['cnt']) for cnt_dict in cnt_dicts if cnt_dict['label']==label]
+        area = sum(area) / len(area)
+        label_area[label] = area
+    
     # If 2 contours are overlapped, change the label of the less group to another label.
     for i, dict_i in tqdm(enumerate(cnt_dicts[:-1]), total=len(cnt_dicts[:-1]), desc='[Remove overlap]'):
         for dict_j in cnt_dicts[i+1:]:
@@ -90,7 +98,8 @@ def remove_group_overlap(cnt_dicts, drawer):
                 
                 # if same label, keep larger one
                 if dict_i['label'] == dict_j['label']:
-                    if cv2.contourArea(dict_i['cnt']) > cv2.contourArea(dict_j['cnt']):
+                    mean_area = label_area[dict_i['label']]
+                    if abs(cv2.contourArea(dict_i['cnt'])-mean_area) < abs(cv2.contourArea(dict_j['cnt'])-mean_area):
                         dict_j['group_weight'] = 0
                     else:
                         dict_i['group_weight'] = 0
@@ -143,6 +152,28 @@ def remove_group_overlap(cnt_dicts, drawer):
 
     checked_list = [cnt_dict for cnt_dict in cnt_dicts if cnt_dict['group_weight'] > 0]
     return checked_list
+
+
+def scale_contour(cnt, type, im_area):
+    area = cv2.contourArea(cnt)
+    if area / im_area >= 0.01:
+        scale = 0.95 if type == 'inner' else 1.05
+    elif area / im_area >= 0.001:
+        scale = 0.9 if type == 'inner' else 1.1
+    else:
+        scale = 0.85 if type == 'inner' else 1.17
+    
+    M = cv2.moments(cnt)
+    cx = int(M['m10']/M['m00'])
+    cy = int(M['m01']/M['m00'])
+
+    cnt_norm = cnt - [cx, cy]
+    cnt_scaled = cnt_norm * scale
+    cnt_scaled = cnt_scaled + [cx, cy]
+    cnt_scaled = cnt_scaled.astype(np.int32)
+
+    return cnt_scaled
+
 
 
 def count_avg_gradient(img, model='lab'):

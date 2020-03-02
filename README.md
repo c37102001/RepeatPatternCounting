@@ -94,3 +94,7 @@ To obtain HED (and RCF) edge images:
   * [Important] Add Sobel edge detection
   * New method for extracting shape feature
   * Lower l channel color gradient by 0.5
+
+* 0302-2
+  * [Important] New color gradient algorithm
+  * new remove overlap method

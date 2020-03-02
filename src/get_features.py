@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 import math
-from utils import get_centroid, eucl_distance
+from utils import get_centroid, eucl_distance, scale_contour
 from ipdb import set_trace as pdb
 from tqdm import tqdm
 
@@ -68,13 +68,16 @@ def get_features(color_img, contours):
         # rotate contour pixels to fit main angle and re-calculate pixels' angle.
         pixel_features = rotate_contour(pixel_features, main_angle)
 
-        pixel_coordinates, color_gradient = sample_by_angle(color_img, pixel_features, sample_number)
+        # pixel_coordinates, color_gradient = sample_by_angle(color_img, pixel_features, sample_number)
         
+        # shape feature
         pixel_distances = [f['distance'] for f in pixel_features]
         dist_sample_step = len(pixel_distances) / sample_number
         pixel_distances = [pixel_distances[math.floor(i*dist_sample_step)] for i in range(sample_number)]
-        
         cnt_pixel_distances.append(pixel_distances)
+
+        # color gradient feature
+        color_gradient = get_cnt_color_gradient(contour, color_img)
         cnt_color_gradient.append(color_gradient)
 
     cnt_size = list(map(cv2.contourArea, contours))
@@ -91,8 +94,40 @@ def get_features(color_img, contours):
         'color_gradient': cnt_color_gradient[i]
     } for i in range(len(contours))]
 
+    # im_copy = color_img.copy()
+    # for index, (c, g) in enumerate(zip(contours, cnt_color_gradient)):
+    #     peri = cv2.arcLength(c, True)
+    #     approx = cv2.approxPolyDP(c, 0.01 * peri, True)
+    #     (x, y, w, h) = cv2.boundingRect(approx)
+    #     im_copy = cv2.putText(im_copy, f'{g:.3f}', (int(x+(w/2)), int(y+(h/2))), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 4, 255), 1)
+    #     im_copy = cv2.drawContours(im_copy, [c], 0, (255, 0, 0), 1)
+    # cv2.imwrite('gradient.png', im_copy)
+
     return cnt_dic_list
 
+
+def get_cnt_color_gradient(contour, im):
+    im_area = im.shape[0] * im.shape[1]
+    cnt_inner = scale_contour(contour, 'inner', im_area)
+    cnt_outer = scale_contour(contour, 'outer', im_area)
+
+    color_gradients = []
+    im_lab = cv2.cvtColor(im, cv2.COLOR_BGR2LAB)
+    for pt_i, pt_o in zip(cnt_inner, cnt_outer):
+        i_x, i_y = pt_i[0][0], pt_i[0][1]
+        o_x, o_y = pt_o[0][0], pt_o[0][1]
+
+        if (0 <= o_x < im.shape[1]) and (0 <= o_y < im.shape[0]):
+            lab_in = im_lab[i_y, i_x]   # (3)
+            lab_out = im_lab[o_y, o_x]  # (3)
+            gradient = np.sqrt(np.sum((lab_in - lab_out) ** 2))
+            color_gradients.append(gradient)
+    
+    color_gradients = sorted([g for g in color_gradients if g>0])
+    # avg_gradient = np.median(color_gradients) if len(color_gradients) else 0
+    avg_gradient = sum(color_gradients) / len(color_gradients) if len(color_gradients) else 0
+    
+    return avg_gradient
 
 def angle_between(vec1, vec2):
     '''Return angle(ranges from 0~360 degree) measured from vec2 to vec1'''
@@ -267,7 +302,6 @@ def color_gradient_by_angle(img, coordinate, angle):
 
 def FindCntAvgLAB(cnt, img):
     mask = np.zeros(img.shape[:2], np.uint8)
-    cnt = cv2.convexHull(np.array(cnt))
     # Fill the contour in order to get the inner points
     cv2.drawContours(mask, [cnt], -1, 255, -1)      # thickness=-1: the contour interiors are drawn
     cv2.drawContours(mask, [cnt], -1, 0, 1)
