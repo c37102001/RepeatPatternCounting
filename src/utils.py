@@ -42,10 +42,10 @@ def is_overlap(cnt1, cnt2):
         return True
 
     cnt1tocnt2 = [cv2.pointPolygonTest(cnt2, tuple(point[0]), False) for point in cnt1]
-    if cnt1tocnt2.count(1) > 0:
+    if cnt1tocnt2.count(-1) < cv2.arcLength(cnt1, closed=True) * 0.7:
         return True
     cnt2tocnt1 = [cv2.pointPolygonTest(cnt1, tuple(point[0]), False) for point in cnt2]
-    if cnt2tocnt1.count(1) > 0:
+    if cnt2tocnt1.count(-1) < cv2.arcLength(cnt2, closed=True) * 0.7:
         return True
     
     return False
@@ -79,6 +79,71 @@ def remove_outliers(contours, m=3):
     keep_contours = [contours[idx] for idx in keep_idx]
 
     return keep_contours
+
+
+def remove_group_overlap(cnt_dicts, drawer):
+    label_change_list = []
+    # If 2 contours are overlapped, change the label of the less group to another label.
+    for i, dict_i in tqdm(enumerate(cnt_dicts[:-1]), total=len(cnt_dicts[:-1]), desc='[Remove overlap]'):
+        for dict_j in cnt_dicts[i+1:]:
+            if is_overlap(dict_i['cnt'], dict_j['cnt']):
+                
+                # if same label, keep larger one
+                if dict_i['label'] == dict_j['label']:
+                    if cv2.contourArea(dict_i['cnt']) > cv2.contourArea(dict_j['cnt']):
+                        dict_j['group_weight'] = 0
+                    else:
+                        dict_i['group_weight'] = 0
+                
+                # if different label and areas are similar, keep larger weight one.
+                # if areas are quite different, keep them both
+                elif 0.2 <= (cv2.contourArea(dict_i['cnt']) / cv2.contourArea(dict_j['cnt'])) <= 5:
+                    if dict_i['group_weight'] > dict_j['group_weight']:
+                        dict_j['group_weight'] = 0
+                        # label_change_list.append((dict_j['label'], dict_i['label']))
+                    else:
+                        dict_i['group_weight'] = 0
+                        # label_change_list.append((dict_i['label'], dict_j['label']))
+    
+    # # check if overlap contours are same contours, if true make them same label
+    # label_group_change = []
+    # label_list = [x['label'] for x in cnt_dicts]
+    # for (less_label, more_label) in set(label_change_list):
+    #     overlap_times = label_change_list.count((less_label, more_label))
+    #     less_weight = label_list.count(less_label)
+    #     more_weight = label_list.count(more_label)
+    #     if overlap_times >= 0.5 * less_weight:          # 0.5 Changeable
+    #         found = False
+    #         for label_group in label_group_change:
+    #             if less_label in label_group:
+    #                 found = True
+    #                 if more_weight >= label_list.count(label_group[-1]):    # >= means when equal, choose later edge map
+    #                     label_group.append(more_label)
+    #                 else:
+    #                     label_group.insert(0, more_label)
+    #             if more_label in label_group:
+    #                 found = True
+    #                 label_group.insert(0, less_label)
+
+    #         if not found:
+    #             label_group_change.append([less_label, more_label])
+
+    # label_change_dic = {}
+    # for label_group in label_group_change:
+    #     most_label = label_group[-1]
+    #     for label in label_group:
+    #         label_change_dic[label] = most_label
+
+    # checked_list = []
+    # for cnt_dic in cnt_dicts:
+        # if cnt_dic['group_weight'] > 0:
+            # if cnt_dic['label'] in label_change_dic:
+                # cnt_dic['label'] = label_change_dic[cnt_dic['label']]
+            # checked_list.append(cnt_dic)
+
+    checked_list = [cnt_dict for cnt_dict in cnt_dicts if cnt_dict['group_weight'] > 0]
+    return checked_list
+
 
 def count_avg_gradient(img, model='lab'):
     # Count the average gardient of the whole image

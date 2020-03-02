@@ -12,11 +12,12 @@ import matplotlib.pyplot as plt
 from ipdb import set_trace as pdb
 
 from canny import canny_edge_detect
+from edge_detection import canny_edge_detect, sobel_edge_detect
 from drawer import ContourDrawer
 from get_contours import get_contours
 from get_features import get_features
 from get_clusters import get_clusters
-from utils import remove_overlap, remove_outliers, count_avg_gradient, evaluate_detection_performance
+from utils import remove_overlap, remove_group_overlap, remove_outliers, count_avg_gradient, evaluate_detection_performance
 
 parser = ArgumentParser()
 parser.add_argument('--test_all', action='store_true', help='test all images in image dir')
@@ -99,6 +100,8 @@ def main(i, img_path):
         # get edge image
         if edge_type == 'Canny':
             edge_img = canny_edge_detect(resi_input_img.copy())
+        elif edge_type == 'Sobel':
+            edge_img = sobel_edge_detect(resi_input_img.copy())
         else:
             edge_path = edge_dir.strip() + img_name + img_extension.strip()
             if not os.path.isfile(edge_path):
@@ -110,12 +113,12 @@ def main(i, img_path):
         # find and filter contours
         contours.extend(get_contours(filter_cfg, drawer, edge_img, edge_type, do_enhance, do_draw))
     
-    # Remove overlap
-    contours = remove_overlap(contours)
-    print(f'[Remove overlap] # after removing overlaps: {len(contours)}')
-    if do_draw or True:
-        img = drawer.draw(contours)
-        drawer.save(img, '1-5_RemoveOverlap')
+    # # Remove overlap
+    # contours = remove_overlap(contours)
+    # print(f'[Remove overlap] # after removing overlaps: {len(contours)}')
+    # if do_draw or True:
+    #     img = drawer.draw(contours)
+    #     drawer.save(img, '1-5_RemoveOverlap')
 
     # # Remove outliers
     # contours = remove_outliers(contours)
@@ -140,6 +143,17 @@ def main(i, img_path):
     labels = [cnt_dict['label'] for cnt_dict in cnt_dicts]  # show original labels and counts
     print('[Cluster results] (label, counts): ', [(label, labels.count(label)) for label in set(labels)])
     
+    # Remove overlap
+    cnt_dicts = remove_group_overlap(cnt_dicts, drawer)
+    labels = [cnt_dict['label'] for cnt_dict in cnt_dicts]
+    print('[Remove overlap results] (label, counts): ', [(label, labels.count(label)) for label in set(labels)])
+    if do_draw or True:
+        img = drawer.blank_img()
+        for label in set(labels):
+            cnts = [cnt_dict['cnt'] for cnt_dict in cnt_dicts if cnt_dict['label']==label]
+            img = drawer.draw_same_color(cnts, img)
+        drawer.save(img, '2-3_RemoveOverlap')
+
     # =============================== 3. Count group obviousity factors ===================================
 
     group_dicts = []
@@ -190,6 +204,7 @@ def main(i, img_path):
         else:
             diff = np.diff(factor_list)
             obvious_index = np.where(diff == max(diff))[0][0] + 1
+
         obvious_value = factor_list[obvious_index]
 
         thres = obvious_value * thres_param

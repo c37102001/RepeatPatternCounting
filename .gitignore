@@ -1,14 +1,10 @@
 *.pyc
-output/*
-output_hed/*
-output_hed_strct/*
 input/*
+output/*
 src/test.py
 .vscode/launch.json
-sync/*
-mission/*
-PoolNet
-exp
 HED/pretrained/network-bsds500.pytorch
 RCF/pretrained/RCFcheckpoint_epoch12.pth
 RCF/pretrained/vgg16convs.mat
+exp
+SF/model.yml.gz

@@ -88,3 +88,9 @@ To obtain HED (and RCF) edge images:
   * [Important] add HED and RCF edges
   * [Important] set cluster threshold to absolute value
   * cancel size outlier removal
+
+* 0302-1
+  * [Important] New pipeline: combine contours >> group >> rm overlap
+  * [Important] Add Sobel edge detection
+  * New method for extracting shape feature
+  * Lower l channel color gradient by 0.5
