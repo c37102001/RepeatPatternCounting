@@ -11,7 +11,6 @@ from configparser import ConfigParser
 import matplotlib.pyplot as plt
 from ipdb import set_trace as pdb
 
-from canny import canny_edge_detect
 from edge_detection import canny_edge_detect, sobel_edge_detect
 from drawer import ContourDrawer
 from get_contours import get_contours
