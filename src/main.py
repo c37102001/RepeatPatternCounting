@@ -16,7 +16,7 @@ from drawer import ContourDrawer
 from get_contours import get_contours
 from get_features import get_features
 from get_clusters import get_clusters
-from utils import remove_overlap, remove_group_overlap, remove_outliers, count_avg_gradient, evaluate_detection_performance
+from utils import remove_group_overlap, evaluate_detection_performance
 
 parser = ArgumentParser()
 parser.add_argument('--test_all', action='store_true', help='test all images in image dir')
@@ -68,11 +68,13 @@ def main(i, img_path):
     print(f'\n[Progress]: {i+1} / {len(img_list)}')
     start = time.time()
 
+
     #======================================== 0. Preprocess ==========================================
     
+
     # check format
     img_name, img_ext = img_path.rsplit('.', 1)     # ['IMG_ (33)',  'jpg']
-    if img_ext not in ['jpg', 'png', 'jpeg']:
+    if img_ext not in ['jpg', 'png', 'jpeg', 'JPG']:
         raise FormatException(f'Format not supported: {img_path}')
         # print(f'[Error] Format not supported: {img_path}')
 
@@ -90,6 +92,7 @@ def main(i, img_path):
 
     #================================ 1. Get and filter contours  ===================================
     
+
     contours = []
     for edge_type in use_edge:
         edge_type = edge_type.strip()
@@ -99,8 +102,10 @@ def main(i, img_path):
         # get edge image
         if edge_type == 'Canny':
             edge_img = canny_edge_detect(resi_input_img.copy())
+
         elif edge_type == 'Sobel':
             edge_img = sobel_edge_detect(resi_input_img.copy())
+
         else:
             edge_path = edge_dir.strip() + img_name + img_extension.strip()
             if not os.path.isfile(edge_path):
@@ -112,50 +117,25 @@ def main(i, img_path):
         # find and filter contours
         contours.extend(get_contours(filter_cfg, drawer, edge_img, edge_type, do_enhance, do_draw))
     
-    # # Remove overlap
-    # contours = remove_overlap(contours)
-    # print(f'[Remove overlap] # after removing overlaps: {len(contours)}')
-    # if do_draw or True:
-    #     img = drawer.draw(contours)
-    #     drawer.save(img, '1-5_RemoveOverlap')
 
-    # # Remove outliers
-    # contours = remove_outliers(contours)
-    # print(f'[Remove size outliers] # after removing outliers: {len(contours)}')
-    
-    # =================== 2. Get contour features and cluster =========================
+    # =================== 2. Get contour features, cluster and remove overlap =========================
+
 
     # Get contour features
     cnt_dicts = get_features(resi_input_img.copy(), contours)
     
     # cluster contours into groups
-    groups_cnt_dicts = get_clusters(cluster_cfg, contours, cnt_dicts, drawer, do_draw)
-    
-    # add label and group weight(num of cnts in the group) into contour dictionary
-    for i, group_cnt_dicts in enumerate(groups_cnt_dicts):
-        for group_cnt_dict in group_cnt_dicts:
-            group_cnt_dict['label'] = i
-            group_cnt_dict['group_weight'] = len(group_cnt_dicts)
-
-    # flatten to a list of contour dict
-    cnt_dicts = [group_cnt_dict for group_cnt_dicts in groups_cnt_dicts for group_cnt_dict in group_cnt_dicts]
-    labels = [cnt_dict['label'] for cnt_dict in cnt_dicts]  # show original labels and counts
-    print('[Cluster results] (label, counts): ', [(label, labels.count(label)) for label in set(labels)])
+    cnt_dicts, labels = get_clusters(cluster_cfg, contours, cnt_dicts, drawer, do_draw)
     
     # Remove overlap
-    cnt_dicts = remove_group_overlap(cnt_dicts, drawer)
-    labels = [cnt_dict['label'] for cnt_dict in cnt_dicts]
-    print('[Remove overlap results] (label, counts): ', [(label, labels.count(label)) for label in set(labels)])
-    if do_draw or True:
-        img = drawer.blank_img()
-        for label in set(labels):
-            cnts = [cnt_dict['cnt'] for cnt_dict in cnt_dicts if cnt_dict['label']==label]
-            img = drawer.draw_same_color(cnts, img)
-        drawer.save(img, '2-3_RemoveOverlap')
+    cnt_dicts, labels = remove_group_overlap(cnt_dicts, labels, drawer, do_draw)
+
 
     # =============================== 3. Count group obviousity factors ===================================
 
+
     group_dicts = []
+    cnt_grads = []  # for drawing color gradients
     for label in set(labels):
         group_cnt_dicts = [cnt_dict for cnt_dict in cnt_dicts if cnt_dict['label'] == label]
         if len(group_cnt_dicts) < 2:
@@ -177,18 +157,26 @@ def main(i, img_path):
             avg_color_gradient += group_cnt_dict['color_gradient']
             group_cnts.append(cnt)
 
+            # for drawing color gradients
+            approx = cv2.approxPolyDP(cnt, 0.01 * cv2.arcLength(cnt, True), True)
+            (x, y, w, h) = cv2.boundingRect(approx)
+            center = (int(x+(w/2)), int(y+(h/2)))
+            cnt_grads.append((group_cnt_dict['color_gradient'], center))
+
         avg_solidity_factor /= len(group_cnt_dicts)
         avg_color_gradient /= len(group_cnt_dicts)
 
         group_dicts.append({
             'group_cnts': group_cnts,
             'area': total_area,
-            'color_gradient': avg_color_gradient, 
+            'color_gradient': avg_color_gradient,
             'solidity': avg_solidity_factor,
             'votes': 0,
         })
 
+
     # ================================= 4. Obviousity voting =====================================
+
 
     factors = ['area', 'solidity', 'color_gradient']
     thres_params = [area_thres, solidity_thres, gradient_thres]
@@ -215,12 +203,16 @@ def main(i, img_path):
         for group in group_dicts[obvious_index:]:
             group['votes'] += 1
 
-        if do_draw:
+        if do_draw or True:
             img = drawer.blank_img()
             for group in group_dicts[obvious_index:]:
                 img = drawer.draw_same_color(group['group_cnts'], img, color=(0, 255, 0))  # green for obvious
             for group in group_dicts[:obvious_index]:
                 img = drawer.draw_same_color(group['group_cnts'], img, color=(0, 0, 255))  # red for others
+
+            if factor == 'color_gradient':
+                for grad, center in cnt_grads:
+                    img = cv2.putText(img, f'{grad:.1f}', center, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
             drawer.save(img, desc=f'4_Obvious_{factor}')
         
             plt.bar(x=range(len(factor_list)), height=factor_list)
@@ -228,7 +220,9 @@ def main(i, img_path):
             plt.savefig(f'{output_dir}{img_name}_4_Obvious_{factor}.png')
             plt.close()
     
+    
     # ============================ 5. Choose groups with most votes ==================================
+
 
     obvious_groups = []
     most_votes_group = max(group_dicts, key=lambda x: x['votes'])
@@ -261,6 +255,7 @@ def main(i, img_path):
         evaluation_csv.append([img_name, tp, fp, fn, pr, re, fm, er])
 
 
+total_start = time.time()
 for i, img_path in enumerate(img_list):
     try:
         main(i, img_path)
@@ -277,3 +272,4 @@ for i, img_path in enumerate(img_list):
         errMsg = f'File "{fileName}", line {lineNum}, in {funcName}: [{error_class}] {detail}'
         print(f'[{img_path}] {errMsg}')
         continue
+print(f'Total finished in {time.time() - total_start} s')

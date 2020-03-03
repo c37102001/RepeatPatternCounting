@@ -98,3 +98,8 @@ To obtain HED (and RCF) edge images:
 * 0302-2
   * [Important] New color gradient algorithm
   * new remove overlap method
+
+* 0303-1
+  * [Important] Optimize overlap algorithm
+  * Fix color gradient bug
+  * Visualize color gradient

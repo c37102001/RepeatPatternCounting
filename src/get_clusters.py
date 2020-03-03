@@ -32,7 +32,6 @@ def get_clusters(cluster_cfg, contours, cnt_dicts, drawer, do_draw=False):
     img = drawer.blank_img()
     groups_cnt_dicts = []
     for combine_label in set(combine_labels):
-
         group_idx = [idx for idx, label in enumerate(combine_labels) if label == combine_label]
         group_cnt_dicts = [cnt_dicts[i] for i in group_idx]
         groups_cnt_dicts.append(group_cnt_dicts)
@@ -44,8 +43,19 @@ def get_clusters(cluster_cfg, contours, cnt_dicts, drawer, do_draw=False):
     if do_draw or True:
         desc = f'2-2_GroupedResult'
         drawer.save(img, desc)
+
+    # add label and group weight(num of cnts in the group) into contour dictionary
+    for i, group_cnt_dicts in enumerate(groups_cnt_dicts):
+        for group_cnt_dict in group_cnt_dicts:
+            group_cnt_dict['label'] = i
+            group_cnt_dict['group_weight'] = len(group_cnt_dicts)
+
+    # flatten to a list of contour dict
+    cnt_dicts = [group_cnt_dict for group_cnt_dicts in groups_cnt_dicts for group_cnt_dict in group_cnt_dicts]
+    labels = [cnt_dict['label'] for cnt_dict in cnt_dicts]  # show original labels and counts
+    print('[Cluster results] (label, counts): ', [(label, labels.count(label)) for label in set(labels)])
     
-    return groups_cnt_dicts
+    return cnt_dicts, labels
 
 
 def hierarchical_clustering(cluster_cfg, feature_list, feature_type, drawer, do_draw=False):
