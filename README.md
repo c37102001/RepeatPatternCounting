@@ -103,3 +103,7 @@ To obtain HED (and RCF) edge images:
   * [Important] Optimize overlap algorithm
   * Fix color gradient bug
   * Visualize color gradient
+
+* 0303-2
+  * [Important] Use color gradient to filter noisy contour
+  * del 'area' from obvious voting. 

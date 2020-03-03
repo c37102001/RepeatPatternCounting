@@ -5,6 +5,7 @@ import sys
 import traceback
 import math
 import time
+import shutil
 import csv
 from argparse import ArgumentParser
 from configparser import ConfigParser
@@ -35,6 +36,9 @@ input_dir = path_cfg['input_dir']
 output_dir = path_cfg['output_dir']
 csv_output = path_cfg['csv_output']
 evaluate_csv_path = path_cfg['evaluate_csv_path']
+if eval(path_cfg['clear_output_dir']):
+    shutil.rmtree(output_dir)
+    os.makedirs(output_dir)
 
 # image config
 img_cfg = cfg['img_cfg']
@@ -117,12 +121,15 @@ def main(i, img_path):
         # find and filter contours
         contours.extend(get_contours(filter_cfg, drawer, edge_img, edge_type, do_enhance, do_draw))
     
+    if do_draw or True:
+        drawer.save(drawer.draw(contours), '2_CombineCnts')
+
 
     # =================== 2. Get contour features, cluster and remove overlap =========================
-
+    
 
     # Get contour features
-    cnt_dicts = get_features(resi_input_img.copy(), contours)
+    contours, cnt_dicts = get_features(resi_input_img.copy(), contours, drawer, do_draw)
     
     # cluster contours into groups
     cnt_dicts, labels = get_clusters(cluster_cfg, contours, cnt_dicts, drawer, do_draw)
@@ -178,7 +185,8 @@ def main(i, img_path):
     # ================================= 4. Obviousity voting =====================================
 
 
-    factors = ['area', 'solidity', 'color_gradient']
+    # factors = ['area', 'solidity', 'color_gradient']
+    factors = ['solidity', 'color_gradient']
     thres_params = [area_thres, solidity_thres, gradient_thres]
     for factor, thres_param in zip(factors, thres_params):
             
@@ -195,6 +203,7 @@ def main(i, img_path):
         obvious_value = factor_list[obvious_index]
 
         thres = obvious_value * thres_param
+        thres = min(thres, 90) if factor == 'color_gradient' else thres # TODO
         for i, factor_value in enumerate(factor_list[:obvious_index]):
             if factor_value > thres:
                 obvious_index = i
@@ -212,7 +221,7 @@ def main(i, img_path):
 
             if factor == 'color_gradient':
                 for grad, center in cnt_grads:
-                    img = cv2.putText(img, f'{grad:.1f}', center, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
+                    img = cv2.putText(img, f'{int(grad)}', center, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
             drawer.save(img, desc=f'4_Obvious_{factor}')
         
             plt.bar(x=range(len(factor_list)), height=factor_list)
@@ -228,8 +237,7 @@ def main(i, img_path):
     most_votes_group = max(group_dicts, key=lambda x: x['votes'])
     most_votes = most_votes_group['votes']
     for group in group_dicts:
-        # TODO can further specify accept 2 when the loss weight is from color
-        if group['votes'] == most_votes:
+        if group['votes'] >= most_votes:
             obvious_groups.append(group)
 
     # contours with same label

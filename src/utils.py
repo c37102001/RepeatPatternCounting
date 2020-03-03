@@ -37,7 +37,7 @@ def is_overlap(cnt1, cnt2):
     c2D = abs(cv2.pointPolygonTest(cnt2, c2M, True))
     c1c2D = eucl_distance(c1M, c2M)
 
-    if c1c2D > (len(cnt1) + len(cnt2)) / 2:
+    if c1c2D > (len(cnt1) + len(cnt2)) / 4:
         return False
 
     # check contains and similar size
@@ -71,6 +71,10 @@ def remove_group_overlap(cnt_dicts, labels, drawer, do_draw):
                         dict_j['group_weight'] = 0
                     else:
                         dict_i['group_weight'] = 0
+                    # if dict_i['color_gradient'] < dict_j['color_gradient']:
+                        # dict_j['group_weight'] = 0
+                    # else:
+                        # dict_i['group_weight'] = 0
                 
                 # if different label and areas are similar, keep larger weight one.
                 # if areas are quite different, keep them both

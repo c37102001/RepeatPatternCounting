@@ -6,7 +6,7 @@ from ipdb import set_trace as pdb
 from tqdm import tqdm
 
 
-def get_features(color_img, contours):
+def get_features(color_img, contours, drawer, do_draw):
     ''' Extract contour color, size, shape, color_gradient features
 
     Args:
@@ -22,24 +22,21 @@ def get_features(color_img, contours):
             'color_gradient': cnt_color_gradient[i]
         } for i in range(len(contours))]
     '''
-    height, width, channel = color_img.shape
-
-    # record the distance between pixels and the centroid
-    # the number of sample distance depend on the dimension of the contour
+    
+    accept_cnts = []
     cnt_pixel_distances = []
-
-    # record the color gradient of the contour 
     cnt_color_gradient = []
-    
-    # several probable dimension of contour shape
-    # If pixel s of the contour is between 4-8 , then we take 4 as its dimension.
-    factor_360 = [4, 8, 20, 40, 90, 180, 360]
-
-    # most_cnt_len = cv2.arcLength(contours[int(len(contours) * 0.8)], closed=True)      # 248
-    # sample_number = min(factor_360, key=lambda factor: abs(factor - most_cnt_len))   # 360
     sample_number = 180
-    
-    for contour in tqdm(contours, desc='[Get features]'):
+    all_grads = [get_cnt_color_gradient(c, color_img) for c in contours]
+    accept_grads = [g for g in all_grads if g > 40]
+    mean_grad = sum(accept_grads) / len(accept_grads) if len(accept_grads) else 0
+
+    for contour, grad in tqdm(zip(contours, all_grads), desc='[Get features]', total=len(contours)):
+        if grad < 20 or (mean_grad > 60 and grad < 40):
+            continue
+        cnt_color_gradient.append(grad)
+        accept_cnts.append(contour)
+
         pixel_features = []
         cM = get_centroid(contour)
 
@@ -74,10 +71,10 @@ def get_features(color_img, contours):
         pixel_distances = [pixel_distances[math.floor(i*dist_sample_step)] for i in range(sample_number)]
         cnt_pixel_distances.append(pixel_distances)
 
-        # color gradient feature
-        color_gradient = get_cnt_color_gradient(contour, color_img)
-        cnt_color_gradient.append(color_gradient)
-
+    contours = accept_cnts
+    if do_draw or True:
+        drawer.save(drawer.draw(contours), '2-0_FilterByGrad')
+    
     cnt_size = list(map(cv2.contourArea, contours))
     max_size = max(cnt_size)
     cnt_norm_size = [[size / max_size] for size in cnt_size]
@@ -92,7 +89,7 @@ def get_features(color_img, contours):
         'color_gradient': cnt_color_gradient[i]
     } for i in range(len(contours))]
 
-    return cnt_dic_list
+    return contours, cnt_dic_list
 
 
 def get_cnt_color_gradient(contour, im):
