@@ -40,12 +40,19 @@ if eval(path_cfg['clear_output_dir']):
     shutil.rmtree(output_dir)
     os.makedirs(output_dir)
 
+# architecture config
+arch_cfg = cfg['arch']
+do_second_clus = eval(arch_cfg['do_second_clus'])
+
 # image config
 img_cfg = cfg['img_cfg']
 if args.test_all:
     img_list = os.listdir(input_dir)
 else:
     img_list = img_cfg['img_list'].split(',')
+    if '-' in img_list[0]:
+        img_from, img_end = img_list[0].split('-')
+        img_list = [f'IMG_ ({i}).jpg' for i in range(eval(img_from), eval(img_end) + 1)]
 resize_height = eval(img_cfg['resize_height'])
 use_edge = img_cfg['use_edge'].split(',')
 
@@ -54,6 +61,7 @@ filter_cfg = cfg['filter_cfg']
 
 # cluster config
 cluster_cfg = cfg['cluster_cfg']
+cluster2_cfg = cfg['cluster2_cfg']
 
 # obviousity thresold config
 obvs_cfg = cfg['obviousity_cfg']
@@ -137,6 +145,11 @@ def main(i, img_path):
     # Remove overlap
     cnt_dicts, labels = remove_group_overlap(cnt_dicts, labels, drawer, do_draw)
 
+    # do second clustering
+    if do_second_clus:
+        contours = [cnt_dict['cnt'] for cnt_dict in cnt_dicts]
+        cnt_dicts, labels = get_clusters(cluster_cfg, contours, cnt_dicts, drawer, do_draw, second=True)
+
 
     # =============================== 3. Count group obviousity factors ===================================
 
@@ -187,7 +200,8 @@ def main(i, img_path):
 
     # factors = ['area', 'solidity', 'color_gradient']
     factors = ['solidity', 'color_gradient']
-    thres_params = [area_thres, solidity_thres, gradient_thres]
+    # thres_params = [area_thres, solidity_thres, gradient_thres]
+    thres_params = [solidity_thres, gradient_thres]
     for factor, thres_param in zip(factors, thres_params):
             
         # sorting by factor from small to large
@@ -203,7 +217,10 @@ def main(i, img_path):
         obvious_value = factor_list[obvious_index]
 
         thres = obvious_value * thres_param
-        thres = min(thres, 90) if factor == 'color_gradient' else thres # TODO
+
+        if factor == 'color_gradient':
+            thres = max(thres, 90) if factor_list[-1] > 100 else min(thres, 90)
+        # thres = min(thres, 90) if factor == 'color_gradient' else thres # TODO
         for i, factor_value in enumerate(factor_list[:obvious_index]):
             if factor_value > thres:
                 obvious_index = i
@@ -236,12 +253,19 @@ def main(i, img_path):
     obvious_groups = []
     most_votes_group = max(group_dicts, key=lambda x: x['votes'])
     most_votes = most_votes_group['votes']
+    
     for group in group_dicts:
         if group['votes'] >= most_votes:
             obvious_groups.append(group)
 
+    # filter group with too few contours
+    print(f'Total Groups: {len(obvious_groups)} (cnt num: {[len(g["group_cnts"]) for g in obvious_groups]})')
+    max_group_count = max([len(group['group_cnts']) for group in obvious_groups])
+    obvious_groups = [g for g in obvious_groups if len(g['group_cnts']) > max_group_count * 0.1]
+    
     # contours with same label
     group_cnts = [group['group_cnts'] for group in obvious_groups]
+    print(f'Total Groups: {len(obvious_groups)} (cnt num: {[len(g["group_cnts"]) for g in obvious_groups]})')
     
     # draw final result
     img = resi_input_img / 3.0    # darken the image to make the contour visible
@@ -251,7 +275,6 @@ def main(i, img_path):
     img = np.concatenate((input_img, img), axis=1)
     drawer.save(img, '5_FinalResult')
 
-    print(f'Total Groups: {len(obvious_groups)} (cnt num: {[len(g["group_cnts"]) for g in obvious_groups]})')
     print(f'Finished in {time.time() - start} s')
 
     print('-----------------------------------------------------------')

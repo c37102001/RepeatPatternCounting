@@ -38,72 +38,78 @@ To obtain HED (and RCF) edge images:
 
 ## Update
 * 0215-1
-  * [Important] change obvious color gradient voting decision(in main.py part 4) according to thesis
-  * fix remove_overlap(contours, 'inner') bug
-  * change obviousity factor name from 'shape' to 'solidity'
-  * add obviousity thresholds into config.ini
-  * remove --test --img arg flags
-  * add title in image
+  * ***Change obvious color gradient voting decision(in main.py part 4) according to thesis***
+  * Fix remove_overlap(contours, 'inner') bug
+  * Change obviousity factor name from 'shape' to 'solidity'
+  * Add obviousity thresholds into config.ini
+  * Remove --test --img arg flags
+  * Add title in image
 
 * 0216-1
-  * [Important] change remove overlap(outer contour) method(in get_group_cnts) and delete keep_list
-  * [Important] remove keep_overlap list in config.ini and modify remove_overlap function. now only allow keep inner
-  * rename images to re-order outputs.
+  * ***Change remove overlap(outer contour) method(in get_group_cnts) and delete keep_list***
+  * ***Remove keep_overlap list in config.ini and modify remove_overlap function. now only allow keep inner***
+  * Rename images to re-order outputs.
 
 * 0216-2
-  * [Important] add edge on border (add method in utils)
+  * ***Add edge on border (add method in utils)***
 
 * 0216-3
-  * [Important] move edge usage into config.ini use_edge and remove combine option
-  * [Important] fix check_overlap label_weight sorting bug
+  * ***Move edge usage into config.ini use_edge and remove combine option***
+  * ***Fix check_overlap label_weight sorting bug***
     * Note: setting `if more_weight >= label_list.count(label_group[-1]):...` means when weights are equal, choose later edge map in config.ini, so the use_edge order do affect result sometimes. The better edge image should put later.
 
 * 0217-1
-  * [Important] add sliding_window.py
-  * [Important] add saliency in input image dir and config.ini
-  * change solidity threshold in contour filtering to average solidity.
+  * ***Add sliding_window.py***
+  * ***Add saliency in input image dir and config.ini***
+  * Change solidity threshold in contour filtering to average solidity.
 
 * 0217-2
-  * [Important] replace solidity filter to area_over_perimeter in `filter_contours`
+  * ***Replace solidity filter to area_over_perimeter in `filter_contours`***
 
 * 0219-1
-  * [Important] change filter to approxPolyDP, convexHull
-  * change area featrue extraction method from arcLength to contourArea
+  * ***Change filter to approxPolyDP, convexHull***
+  * Change area featrue extraction method from arcLength to contourArea
 
 * 0224-1
-  * add check overlap condition: any point inside the other contour
-  * area obvious change to 0.25*largest area
-  * add morphological closing
+  * Add check overlap condition: any point inside the other contour
+  * Area obvious change to 0.25*largest area
+  * Add morphological closing
 
 * 0224-2
-  * [Important] change pipeline to combine contours first, then remove extract features and group.
-  * [Important] add clustering threshold
+  * ***Change pipeline to combine contours first, then remove extract features and group.***
+  * ***Add clustering threshold***
 
 * 0225-1
-  * [Important] remove img_avg_color_gradient from obvisity filter
-  * [Important] add "empirical" clustering threshold
-  * add remove size outliers
+  * ***Remove img_avg_color_gradient from obvisity filter***
+  * ***Add "empirical" clustering threshold***
+  * Add remove size outliers
 
 * 0226-1
-  * [Important] add HED and RCF edges
-  * [Important] set cluster threshold to absolute value
-  * cancel size outlier removal
+  * ***Add HED and RCF edges***
+  * ***Set cluster threshold to absolute value***
+  * Cancel size outlier removal
 
 * 0302-1
-  * [Important] New pipeline: combine contours >> group >> rm overlap
-  * [Important] Add Sobel edge detection
+  * ***New pipeline: combine contours >> group >> rm overlap***
+  * ***Add Sobel edge detection***
   * New method for extracting shape feature
   * Lower l channel color gradient by 0.5
 
 * 0302-2
-  * [Important] New color gradient algorithm
-  * new remove overlap method
+  * ***New color gradient algorithm***
+  * New remove overlap method
 
 * 0303-1
-  * [Important] Optimize overlap algorithm
+  * ***Optimize overlap algorithm***
   * Fix color gradient bug
   * Visualize color gradient
 
 * 0303-2
-  * [Important] Use color gradient to filter noisy contour
-  * del 'area' from obvious voting. 
+  * ***Use color gradient to filter noisy contour***
+  * ***Remove 'area' from obvious voting***
+
+* 0303-1
+  * ***Add second clustering***
+  * ***Set `color_gradient` as remove overlap criteria when different labels***
+  * Filter group with too few contours at the end
+  * Add function `clear_output_dir = True` and `img_list = 1-5` in config.ini

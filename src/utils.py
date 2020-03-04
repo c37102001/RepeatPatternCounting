@@ -71,19 +71,22 @@ def remove_group_overlap(cnt_dicts, labels, drawer, do_draw):
                         dict_j['group_weight'] = 0
                     else:
                         dict_i['group_weight'] = 0
-                    # if dict_i['color_gradient'] < dict_j['color_gradient']:
-                        # dict_j['group_weight'] = 0
-                    # else:
-                        # dict_i['group_weight'] = 0
                 
                 # if different label and areas are similar, keep larger weight one.
                 # if areas are quite different, keep them both
                 elif 0.2 <= (cv2.contourArea(dict_i['cnt']) / cv2.contourArea(dict_j['cnt'])) <= 5:
-                    if dict_i['group_weight'] > dict_j['group_weight']:
+                    grads_i = [d['color_gradient'] for d in cnt_dicts if d['label']==dict_i['label']]
+                    mean_grad_i = sum(grads_i) / len(grads_i)
+                    grads_j = [d['color_gradient'] for d in cnt_dicts if d['label']==dict_j['label']]
+                    mean_grad_j = sum(grads_j) / len(grads_j)
+                    if mean_grad_i > mean_grad_j:
                         dict_j['group_weight'] = 0
                     else:
                         dict_i['group_weight'] = 0
-    
+                    # if dict_i['group_weight'] > dict_j['group_weight']:
+                        # dict_j['group_weight'] = 0
+                    # else:
+                        # dict_i['group_weight'] = 0
     # draw
     cnt_dicts = [cnt_dict for cnt_dict in cnt_dicts if cnt_dict['group_weight'] > 0]
     labels = [cnt_dict['label'] for cnt_dict in cnt_dicts]

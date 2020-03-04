@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from ipdb import set_trace as pdb
 
 
-def get_clusters(cluster_cfg, contours, cnt_dicts, drawer, do_draw=False):
+def get_clusters(cluster_cfg, contours, cnt_dicts, drawer, do_draw=False, second=False):
 
     # Do hierarchicalclustering by shape, color, and size
     label_dict = {}
@@ -41,7 +41,7 @@ def get_clusters(cluster_cfg, contours, cnt_dicts, drawer, do_draw=False):
         img = drawer.draw_same_color(cnts, img)
         
     if do_draw or True:
-        desc = f'2-2_GroupedResult'
+        desc = f'2-2_GroupedResult' if not second else f'2-4_SecondGrouped'
         drawer.save(img, desc)
 
     # add label and group weight(num of cnts in the group) into contour dictionary
