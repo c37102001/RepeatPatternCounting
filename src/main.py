@@ -17,7 +17,7 @@ from drawer import ContourDrawer
 from get_contours import get_contours
 from get_features import get_features
 from get_clusters import get_clusters
-from utils import remove_group_overlap, evaluate_detection_performance
+from utils import remove_group_overlap, filter_small_group, evaluate_detection_performance
 
 parser = ArgumentParser()
 parser.add_argument('--test_all', action='store_true', help='test all images in image dir')
@@ -150,6 +150,9 @@ def main(i, img_path):
         contours = [cnt_dict['cnt'] for cnt_dict in cnt_dicts]
         cnt_dicts, labels = get_clusters(cluster_cfg, contours, cnt_dicts, drawer, do_draw, second=True)
 
+    # filter group with too less contours
+    cnt_dicts, labels = filter_small_group(cnt_dicts, labels, drawer, do_draw)
+
 
     # =============================== 3. Count group obviousity factors ===================================
 
@@ -257,11 +260,6 @@ def main(i, img_path):
     for group in group_dicts:
         if group['votes'] >= most_votes:
             obvious_groups.append(group)
-
-    # filter group with too few contours
-    print(f'Total Groups: {len(obvious_groups)} (cnt num: {[len(g["group_cnts"]) for g in obvious_groups]})')
-    max_group_count = max([len(group['group_cnts']) for group in obvious_groups])
-    obvious_groups = [g for g in obvious_groups if len(g['group_cnts']) > max_group_count * 0.1]
     
     # contours with same label
     group_cnts = [group['group_cnts'] for group in obvious_groups]

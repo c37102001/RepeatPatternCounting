@@ -108,8 +108,11 @@ To obtain HED (and RCF) edge images:
   * ***Use color gradient to filter noisy contour***
   * ***Remove 'area' from obvious voting***
 
-* 0303-1
+* 0304-1
   * ***Add second clustering***
   * ***Set `color_gradient` as remove overlap criteria when different labels***
   * Filter group with too few contours at the end
   * Add function `clear_output_dir = True` and `img_list = 1-5` in config.ini
+
+* 0304-2
+  * ***Do `filter small group` before obviousity voting***

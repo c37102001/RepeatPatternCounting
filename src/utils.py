@@ -122,8 +122,22 @@ def scale_contour(cnt, type, im_area):
     return cnt_scaled
 
 
+def filter_small_group(cnt_dicts, labels, drawer, do_draw, ratio=0.1):
+    group_dicts = [[d for d in cnt_dicts if d['label']==label] for label in set(labels)]
+    max_group_count = max([len(g) for g in group_dicts])
+    filtered_group_dicts = [g for g in group_dicts if len(g) >= max_group_count * ratio]
+    
+    cnt_dicts = [d for g in filtered_group_dicts for d in g]
+    labels = [cnt_dict['label'] for cnt_dict in cnt_dicts]
+    print('[Del small group] (label, counts): ', [(label, labels.count(label)) for label in set(labels)])
 
-
+    if do_draw or True:
+        img = drawer.blank_img()
+        for label in set(labels):
+            cnts = [cnt_dict['cnt'] for cnt_dict in cnt_dicts if cnt_dict['label']==label]
+            img = drawer.draw_same_color(cnts, img)
+        drawer.save(img, '2-5_RemoveSmallGroup')
+    return cnt_dicts, labels
 
 
 def evaluate_detection_performance(img, fileName, final_group_cnt, resize_ratio, evaluate_csv_path):
