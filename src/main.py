@@ -18,6 +18,9 @@ from get_contours import get_contours
 from get_features import get_features
 from get_clusters import get_clusters
 from utils import remove_group_overlap, filter_small_group, evaluate_detection_performance
+from RCF.run_rcf import make_single_rcf
+from HED.run_hed import make_single_hed
+from SF.run_sf import make_single_sf
 
 parser = ArgumentParser()
 parser.add_argument('--test_all', action='store_true', help='test all images in image dir')
@@ -88,9 +91,10 @@ def main(i, img_path):
     img_name, img_ext = img_path.rsplit('.', 1)     # ['IMG_ (33)',  'jpg']
     if img_ext not in ['jpg', 'png', 'jpeg', 'JPG']:
         raise FormatException(f'Format not supported: {img_path}')
-        # print(f'[Error] Format not supported: {img_path}')
 
     print('[Input] %s' % img_path)
+    if not os.path.isfile(input_dir + img_path):
+        raise IOError(f'No such image: {img_path}')
     input_img = cv2.imread(input_dir + img_path)
     img_height = input_img.shape[0]               # shape: (1365, 2048, 3)
     
@@ -103,7 +107,7 @@ def main(i, img_path):
 
 
     #================================ 1. Get and filter contours  ===================================
-    
+
 
     contours = []
     for edge_type in use_edge:
@@ -121,8 +125,15 @@ def main(i, img_path):
         else:
             edge_path = edge_dir.strip() + img_name + img_extension.strip()
             if not os.path.isfile(edge_path):
-                print(f'[Error] EDGE FILE {edge_path} does not exist!')
-                continue
+                if edge_type == 'RCF':
+                    print('[Input] Making RCF edge image...')
+                    make_single_rcf(img_path, input_dir, edge_dir)
+                if edge_type == 'HED':
+                    print('[Input] Making HED edge image...')
+                    make_single_hed(img_path, input_dir, edge_dir)
+                if edge_type == 'Structure':
+                    print('[Input] Making SF edge image...')
+                    make_single_sf(img_path, input_dir, edge_dir)
             edge_img = cv2.imread(edge_path, cv2.IMREAD_GRAYSCALE)
             edge_img = cv2.resize(edge_img, (0, 0), fx=resize_factor, fy=resize_factor)     # shape: (736, *)
 
@@ -131,7 +142,6 @@ def main(i, img_path):
     
     if do_draw or True:
         drawer.save(drawer.draw(contours), '2_CombineCnts')
-
 
     # =================== 2. Get contour features, cluster and remove overlap =========================
     
@@ -144,11 +154,11 @@ def main(i, img_path):
     
     # Remove overlap
     cnt_dicts, labels = remove_group_overlap(cnt_dicts, labels, drawer, do_draw)
-
+    
     # do second clustering
     if do_second_clus:
         contours = [cnt_dict['cnt'] for cnt_dict in cnt_dicts]
-        cnt_dicts, labels = get_clusters(cluster_cfg, contours, cnt_dicts, drawer, do_draw, second=True)
+        cnt_dicts, labels = get_clusters(cluster2_cfg, contours, cnt_dicts, drawer, do_draw, second=True)
 
     # filter group with too less contours
     cnt_dicts, labels = filter_small_group(cnt_dicts, labels, drawer, do_draw)

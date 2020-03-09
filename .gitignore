@@ -3,8 +3,9 @@ input/*
 output/*
 src/test.py
 .vscode/launch.json
-HED/pretrained/network-bsds500.pytorch
-RCF/pretrained/RCFcheckpoint_epoch12.pth
-RCF/pretrained/vgg16convs.mat
 exp
 SF/model.yml.gz
+src/SF/model.yml.gz
+src/HED/pretrained/network-bsds500.pytorch
+src/RCF/pretrained/RCFcheckpoint_epoch12.pth
+src/RCF/pretrained/vgg16convs.mat

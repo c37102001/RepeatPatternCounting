@@ -116,3 +116,6 @@ To obtain HED (and RCF) edge images:
 
 * 0304-2
   * ***Do `filter small group` before obviousity voting***
+  
+* 0309
+  * ***Allow producing SF, HED and RCF edge image in procedure***

@@ -5,20 +5,18 @@ from PIL import Image
 import torch
 import torchvision
 import scipy.io as sio
-from models import RCF
+from .models import RCF
 from torch.utils.data import Dataset, DataLoader
 from os.path import join, split, isdir, isfile, splitext, split
 from ipdb import set_trace as pdb
 
-img_dir = '../input/image/'
-save_dir = '../input/rcf_edge_image/'
 test_list_dir = 'test_all.lst'
-vggmodel_dir='pretrained/vgg16convs.mat'
-checkpoint_dir = 'pretrained/RCFcheckpoint_epoch12.pth'
+vggmodel_dir='RCF/pretrained/vgg16convs.mat'
+checkpoint_dir = 'RCF/pretrained/RCFcheckpoint_epoch12.pth'
 
 
 class TestLoader(Dataset):
-    def __init__(self, list_dir, root=img_dir):
+    def __init__(self, list_dir, root):
         self.root = root
         with open(list_dir, 'r') as f:
             self.filelist = f.readlines()
@@ -45,8 +43,8 @@ def load_vgg16pretrain(model, vggmodel=vggmodel_dir):
     model.load_state_dict(torch_params)
 
 
-def main():
-    test_dataset = TestLoader(test_list_dir)
+def make_rcf(test_list_dir, img_dir):
+    test_dataset = TestLoader(test_list_dir, img_dir)
     test_loader = DataLoader(test_dataset, shuffle=False)
     with open(test_list_dir, 'r') as f:
         test_list = f.readlines()
@@ -86,5 +84,35 @@ def main():
         print("Running test [%d/%d]" % (idx + 1, len(test_loader)))
 
 
+def make_single_rcf(img_path, img_dir, save_dir):
+    image = cv2.imread(join(img_dir, img_path)).astype(np.float32)
+    img_name = img_path.split('.', 1)[0]
+    
+    # model
+    model = RCF()
+    model.cuda()
+    load_vgg16pretrain(model)
+    if isfile(checkpoint_dir): 
+        checkpoint = torch.load(checkpoint_dir)
+        model.load_state_dict(checkpoint['state_dict'])
+
+    model.eval()
+    resize_factor = 1.0
+    while True:
+        try:
+            resi_image = cv2.resize(image, (0, 0), fx=resize_factor, fy=resize_factor)
+            resi_image = np.transpose(resi_image, (2, 0, 1))                                  # (3, 736, 550)
+            resi_image = torch.FloatTensor(resi_image).unsqueeze(0)
+            resi_image = resi_image.cuda()
+            results = model(resi_image)
+            break
+        except Exception as e:
+            resize_factor *= 0.95
+    result = torch.squeeze(results[-1].detach()).cpu().numpy()
+    result = cv2.resize(result, (0, 0), fx=1/resize_factor, fy=1/resize_factor)
+    result = Image.fromarray((result * 255).astype(np.uint8))
+    result.save(join(save_dir, "%s_rcf.png" % img_name))
+
+
 if __name__ == '__main__':
-    main()
+    make_single_rcf('IMG_pigs1.png')

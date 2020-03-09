@@ -4,24 +4,21 @@ import PIL
 import PIL.Image
 import cv2
 from os import listdir
-from model import Network
+from .model import Network
 from tqdm import tqdm
 from ipdb import set_trace as pdb
 
-IMG_DIR = '../input/image/'
-OUTPUT_DIR = '../input/hed_edge_image/'
-pretrained_dir = 'pretrained/network-bsds500.pytorch'
+pretrained_dir = 'HED/pretrained/network-bsds500.pytorch'
 torch.set_grad_enabled(False)
 torch.backends.cudnn.enabled = True
 
 
-moduleNetwork = Network(pretrained_dir).cuda().eval()
+def make_single_hed(img_path, img_dir, output_dir):
+    moduleNetwork = Network(pretrained_dir).cuda().eval()
 
-for img_path in tqdm(listdir(IMG_DIR)):
-    print(img_path)
     img_name = '.'.join(img_path.split('.')[:-1])   # remove .jpg
-    arguments_strIn = IMG_DIR + img_path
-    arguments_strOut = OUTPUT_DIR + img_name + '_hed.png' 
+    arguments_strIn = img_dir + img_path
+    arguments_strOut = output_dir + img_name + '_hed.png' 
 
     img = cv2.imread(arguments_strIn)
     resize_factor = 1.0
@@ -35,7 +32,6 @@ for img_path in tqdm(listdir(IMG_DIR)):
             break
         except:
             resize_factor *= 0.95
-            print(img_path)
     tensorOutput = (tensorOutput.clamp(0.0, 1.0).numpy().transpose(1, 2, 0)[:, :, 0] * 255.0).astype(numpy.uint8)
     tensorOutput = cv2.resize(tensorOutput, (0, 0), fx=1/resize_factor, fy=1/resize_factor)
     tensorOutput = PIL.Image.fromarray(tensorOutput).save(arguments_strOut)
