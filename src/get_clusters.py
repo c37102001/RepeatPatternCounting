@@ -1,3 +1,4 @@
+import os
 import numpy as np
 from scipy.cluster.hierarchy import linkage, fcluster
 import matplotlib.pyplot as plt
@@ -116,7 +117,7 @@ def hierarchical_clustering(cluster_cfg, feature_list, feature_type, drawer, do_
         if do_draw:
             plt.bar(x=range(len(diff_list)), height=diff_list)
             plt.title(f'{feature_type} diff plot')
-            save_path = f'{drawer.output_path}{drawer.img_name}_2-1_{feature_type.capitalize()}Group.png'
+            save_path = os.path.join(drawer.output_path, f'{drawer.img_name}_2-1_{feature_type.capitalize()}Group.png')
             plt.savefig(save_path)
             plt.close()
         return [0] * len(feature_list)
@@ -131,7 +132,7 @@ def hierarchical_clustering(cluster_cfg, feature_list, feature_type, drawer, do_
     if do_draw:
         plt.bar(x=range(len(diff_list)), height=diff_list)
         plt.title(f'{feature_type} cut idx: {target_diff_idx} | value: {target_diff:.3f}')
-        save_path = f'{drawer.output_path}{drawer.img_name}_2-1_{feature_type.capitalize()}Group.png'
+        save_path = os.path.join(drawer.output_path, f'{drawer.img_name}_2-1_{feature_type.capitalize()}Group.png')
         plt.savefig(save_path)
         plt.close()
 

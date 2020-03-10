@@ -35,28 +35,39 @@ cfg.read('config.ini')
 
 # path config
 path_cfg = cfg['path']
-input_dir = path_cfg['input_dir']
-output_dir = path_cfg['output_dir']
+source_path = os.path.join(path_cfg['source_path'], path_cfg['data_name'])
+img_path = os.path.join(source_path, path_cfg['img_dir'])
+edge_path = os.path.join(source_path, path_cfg['edge_dir'])
+if not os.path.exists(img_path):
+    raise IOError(f'Image Path "{img_path}" Not Found')
+
+output_path = os.path.join(path_cfg['output_path'], path_cfg['data_name'])
+if not os.path.exists(output_path):
+    os.makedirs(output_path)
+elif eval(path_cfg['clear_results']):
+    shutil.rmtree(output_path)
+    os.makedirs(output_path)
+
 csv_output = path_cfg['csv_output']
 evaluate_csv_path = path_cfg['evaluate_csv_path']
-if eval(path_cfg['clear_output_dir']):
-    shutil.rmtree(output_dir)
-    os.makedirs(output_dir)
+
 
 # architecture config
 arch_cfg = cfg['arch']
 do_second_clus = eval(arch_cfg['do_second_clus'])
+filter_by_gradient = eval(arch_cfg['filter_by_gradient'])
 
 # image config
 img_cfg = cfg['img_cfg']
 if args.test_all:
-    img_list = os.listdir(input_dir)
+    img_list = os.listdir(img_path)
 else:
     img_list = img_cfg['img_list'].split(',')
     if '-' in img_list[0]:
         img_from, img_end = img_list[0].split('-')
         img_list = [f'IMG_ ({i}).jpg' for i in range(eval(img_from), eval(img_end) + 1)]
 resize_height = eval(img_cfg['resize_height'])
+file_ext = img_cfg['edge_file_extension']
 use_edge = img_cfg['use_edge'].split(',')
 
 # filter contour config
@@ -78,30 +89,19 @@ evaluate = eval(eval_cfg['evaluate'])
 evaluation_csv = eval_cfg['evaluation_csv'].split(',')
 
 
-def main(i, img_path):
-    img_path = img_path.strip()
-    print(f'\n[Progress]: {i+1} / {len(img_list)}')
-    start = time.time()
-
+def main(img_file):         # img_file = 'IMG_ (33).jpg'
 
     #======================================== 0. Preprocess ==========================================
     
 
-    # check format
-    img_name, img_ext = img_path.rsplit('.', 1)     # ['IMG_ (33)',  'jpg']
-    if img_ext not in ['jpg', 'png', 'jpeg', 'JPG']:
-        raise FormatException(f'Format not supported: {img_path}')
+    img_name, img_ext = img_file.rsplit('.', 1)     # ['IMG_ (33)',  'jpg']
 
-    print('[Input] %s' % img_path)
-    if not os.path.isfile(input_dir + img_path):
-        raise IOError(f'No such image: {img_path}')
-    input_img = cv2.imread(input_dir + img_path)
+    input_img = cv2.imread(img_path + img_file)
     img_height = input_img.shape[0]               # shape: (1365, 2048, 3)
-    
-    # resize_height=736, shape: (1365, 2048, 3) -> (736,1104,3)
-    resize_factor = resize_height / img_height
+    resize_factor = resize_height / img_height  # resize_height=736, shape: (1365, 2048, 3) -> (736,1104,3)
     resi_input_img = cv2.resize(input_img, (0, 0), fx=resize_factor, fy=resize_factor)
-    drawer = ContourDrawer(resi_input_img.copy(), output_dir, img_name, do_mark=do_mark)
+    
+    drawer = ContourDrawer(resi_input_img.copy(), output_path, img_name, do_mark=do_mark)
     if do_draw:
         drawer.save(resi_input_img.copy(), '0_original_image')
 
@@ -112,8 +112,7 @@ def main(i, img_path):
     contours = []
     for edge_type in use_edge:
         edge_type = edge_type.strip()
-        edge_dir, img_extension, do_enhance = img_cfg[edge_type].split(',')
-        do_enhance = eval(do_enhance)
+        do_enhance = eval(img_cfg[edge_type])
         
         # get edge image
         if edge_type == 'Canny':
@@ -123,18 +122,24 @@ def main(i, img_path):
             edge_img = sobel_edge_detect(resi_input_img.copy())
 
         else:
-            edge_path = edge_dir.strip() + img_name + img_extension.strip()
-            if not os.path.isfile(edge_path):
+            edge_folder_path = os.path.join(edge_path, edge_type)
+            edge_img_file = img_name + f'_{edge_type.lower()}' + file_ext
+            edge_img_path = os.path.join(edge_folder_path, edge_img_file)
+            
+            if not os.path.isfile(edge_img_path):
+                if not os.path.exists(edge_folder_path):
+                    os.makedirs(edge_folder_path)
                 if edge_type == 'RCF':
                     print('[Input] Making RCF edge image...')
-                    make_single_rcf(img_path, input_dir, edge_dir)
+                    make_single_rcf(input_img, edge_img_path)
                 if edge_type == 'HED':
                     print('[Input] Making HED edge image...')
-                    make_single_hed(img_path, input_dir, edge_dir)
-                if edge_type == 'Structure':
+                    make_single_hed(input_img, edge_img_path)
+                if edge_type == 'SF':
                     print('[Input] Making SF edge image...')
-                    make_single_sf(img_path, input_dir, edge_dir)
-            edge_img = cv2.imread(edge_path, cv2.IMREAD_GRAYSCALE)
+                    make_single_sf(input_img, edge_img_path)
+
+            edge_img = cv2.imread(edge_img_path, cv2.IMREAD_GRAYSCALE)
             edge_img = cv2.resize(edge_img, (0, 0), fx=resize_factor, fy=resize_factor)     # shape: (736, *)
 
         # find and filter contours
@@ -142,12 +147,12 @@ def main(i, img_path):
     
     if do_draw or True:
         drawer.save(drawer.draw(contours), '2_CombineCnts')
-
+    
     # =================== 2. Get contour features, cluster and remove overlap =========================
     
 
     # Get contour features
-    contours, cnt_dicts = get_features(resi_input_img.copy(), contours, drawer, do_draw)
+    contours, cnt_dicts = get_features(resi_input_img.copy(), contours, drawer, do_draw, filter_by_gradient)
     
     # cluster contours into groups
     cnt_dicts, labels = get_clusters(cluster_cfg, contours, cnt_dicts, drawer, do_draw)
@@ -211,10 +216,10 @@ def main(i, img_path):
     # ================================= 4. Obviousity voting =====================================
 
 
-    # factors = ['area', 'solidity', 'color_gradient']
-    factors = ['solidity', 'color_gradient']
-    # thres_params = [area_thres, solidity_thres, gradient_thres]
-    thres_params = [solidity_thres, gradient_thres]
+    factors = ['area', 'solidity', 'color_gradient']
+    # factors = ['solidity', 'color_gradient']
+    thres_params = [area_thres, solidity_thres, gradient_thres]
+    # thres_params = [solidity_thres, gradient_thres]
     for factor, thres_param in zip(factors, thres_params):
             
         # sorting by factor from small to large
@@ -232,7 +237,10 @@ def main(i, img_path):
         thres = obvious_value * thres_param
 
         if factor == 'color_gradient':
-            thres = max(thres, 90) if factor_list[-1] > 100 else min(thres, 90)
+            if obvious_value < 40:
+                thres = 0
+            else:
+                thres = max(thres, 90) if factor_list[-1] > 100 else min(thres, 90)
         # thres = min(thres, 90) if factor == 'color_gradient' else thres # TODO
         for i, factor_value in enumerate(factor_list[:obvious_index]):
             if factor_value > thres:
@@ -256,7 +264,7 @@ def main(i, img_path):
         
             plt.bar(x=range(len(factor_list)), height=factor_list)
             plt.title(f'{factor} cut idx: {obvious_index} | threshold: {thres: .3f}')
-            plt.savefig(f'{output_dir}{img_name}_4_Obvious_{factor}.png')
+            plt.savefig(os.path.join(output_path, f'{img_name}_4_Obvious_{factor}.png'))
             plt.close()
     
     
@@ -283,7 +291,7 @@ def main(i, img_path):
     img = np.concatenate((input_img, img), axis=1)
     drawer.save(img, '5_FinalResult')
 
-    print(f'Finished in {time.time() - start} s')
+    
 
     print('-----------------------------------------------------------')
 
@@ -295,9 +303,20 @@ def main(i, img_path):
 
 
 total_start = time.time()
-for i, img_path in enumerate(img_list):
+for i, img_file in enumerate(img_list):
+    print(f'\n[Progress]: {i+1} / {len(img_list)}')
+    img_file = img_file.strip()
+
+    if os.path.isfile(os.path.join(img_path, img_file)):
+        print(f'[Input] {os.path.join(img_path, img_file)}')
+    else:
+        print(f'No such image: {os.path.join(img_path, img_file)}')
+        continue
+    
     try:
-        main(i, img_path)
+        start = time.time()
+        main(img_file)
+        print(f'Finished in {time.time() - start} s')
     except KeyboardInterrupt:
         break
     except Exception as e:
@@ -309,6 +328,6 @@ for i, img_path in enumerate(img_list):
         lineNum = lastCallStack[1]
         funcName = lastCallStack[2]
         errMsg = f'File "{fileName}", line {lineNum}, in {funcName}: [{error_class}] {detail}'
-        print(f'[{img_path}] {errMsg}')
+        print(f'[{img_file}] {errMsg}')
         continue
 print(f'Total finished in {time.time() - total_start} s')

@@ -6,7 +6,7 @@ from ipdb import set_trace as pdb
 from tqdm import tqdm
 
 
-def get_features(color_img, contours, drawer, do_draw):
+def get_features(color_img, contours, drawer, do_draw, filter_by_gradient):
     ''' Extract contour color, size, shape, color_gradient features
 
     Args:
@@ -32,8 +32,10 @@ def get_features(color_img, contours, drawer, do_draw):
     mean_grad = sum(accept_grads) / len(accept_grads) if len(accept_grads) else 0
 
     for contour, grad in tqdm(zip(contours, all_grads), desc='[Get features]', total=len(contours)):
-        if grad < 20 or (mean_grad > 60 and grad < 40):
-            continue
+        
+        if filter_by_gradient:
+            if grad < 20 or (mean_grad > 60 and grad < 40):
+                continue
         cnt_color_gradient.append(grad)
         accept_cnts.append(contour)
 
@@ -72,7 +74,7 @@ def get_features(color_img, contours, drawer, do_draw):
         cnt_pixel_distances.append(pixel_distances)
 
     contours = accept_cnts
-    if do_draw or True:
+    if do_draw or filter_by_gradient:
         drawer.save(drawer.draw(contours), '2-0_FilterByGrad')
     
     cnt_size = list(map(cv2.contourArea, contours))

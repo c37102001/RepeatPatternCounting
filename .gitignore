@@ -9,3 +9,4 @@ src/SF/model.yml.gz
 src/HED/pretrained/network-bsds500.pytorch
 src/RCF/pretrained/RCFcheckpoint_epoch12.pth
 src/RCF/pretrained/vgg16convs.mat
+data

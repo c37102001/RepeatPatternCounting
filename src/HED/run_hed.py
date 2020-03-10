@@ -13,14 +13,9 @@ torch.set_grad_enabled(False)
 torch.backends.cudnn.enabled = True
 
 
-def make_single_hed(img_path, img_dir, output_dir):
+def make_single_hed(img, edge_img_path):
     moduleNetwork = Network(pretrained_dir).cuda().eval()
 
-    img_name = '.'.join(img_path.split('.')[:-1])   # remove .jpg
-    arguments_strIn = img_dir + img_path
-    arguments_strOut = output_dir + img_name + '_hed.png' 
-
-    img = cv2.imread(arguments_strIn)
     resize_factor = 1.0
     while True:
         try:
@@ -34,5 +29,5 @@ def make_single_hed(img_path, img_dir, output_dir):
             resize_factor *= 0.95
     tensorOutput = (tensorOutput.clamp(0.0, 1.0).numpy().transpose(1, 2, 0)[:, :, 0] * 255.0).astype(numpy.uint8)
     tensorOutput = cv2.resize(tensorOutput, (0, 0), fx=1/resize_factor, fy=1/resize_factor)
-    tensorOutput = PIL.Image.fromarray(tensorOutput).save(arguments_strOut)
+    tensorOutput = PIL.Image.fromarray(tensorOutput).save(edge_img_path)
 

@@ -26,7 +26,6 @@ def get_contours(filter_cfg, drawer, edge_img, edge_type, do_enhance=True, do_dr
             'color_gradient': cnt_color_gradient[i]
         }
     '''
-    output_path = drawer.output_path
     img_name = drawer.img_name
 
     if do_draw:

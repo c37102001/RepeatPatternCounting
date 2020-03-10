@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import cv2
 from ipdb import set_trace as pdb
@@ -49,5 +50,5 @@ class ContourDrawer:
     
     def save(self, img, desc):
         img = cv2.putText(img, desc, (20, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
-        img_path = '{}{}_{}.jpg'.format(self.output_path, self.img_name, desc)
+        img_path = os.path.join(self.output_path, f'{self.img_name}_{desc}.jpg')
         cv2.imwrite(img_path, img)

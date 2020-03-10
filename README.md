@@ -2,18 +2,16 @@
 
 
 ## Preparation
-Images are available from https://ppt.cc/ffLrKx
-* put color imgs(det_imgs) in `input/image/`
-* put structure forest edge imgs(det_edges) in `input/edge_image/`
-* put HED edge imgs(hed_edges) in `input/hed_edge_image/`
-* put RCF edge imgs(rcf_edges) in `input/rcf_edge_image/`
-* put saliency imgs (saliency_maps) in `input/saliency_image/`
-* modify configs in `config.ini`
 
-HED, RCF pretrained models are available from https://ppt.cc/fzN82x
+***From 0310 Updates, no need to download edge images anymore. Just put your images under `data/your_folder_name/image/` and modify `data_name = your_folder_name` in `config.ini`, then run `python main.py --test_all`, all generated edge images will be stored under `data/your_folder_name/edge/` and the results under `output/your_folder_name/`. See sample directory structure below.***
+
+Images are available from https://ppt.cc/ffLrKx
+
+HED, RCF, SF pretrained models are available from https://ppt.cc/fzN82x
 * download `HED/network-bsds500.pytorch` model and put it in `HED/pretrained/`
 * download `RCF/RCFcheckpoint_epoch12.pth` model and put it in `RCF/pretrained/`
 * download `RCF/vgg16convs.mat` model and put it in `RCF/pretrained/`
+* download structure forest model from `https://ppt.cc/fk7Xsx` and put it in `SF/`
 
 
 ## How to run
@@ -29,11 +27,6 @@ For new version
     1. run `python main.py --test_all`
 * add `--draw` to draw all process images
 * add `--mark` to plot contour numbers in images
-
-To obtain HED (and RCF) edge images:
-* cd `HED`
-* modify IMG_DIR, OUTPUT_DIR in `run_hed.py` (and test.lst or test_all.lst for RCF)
-* run `python run_hed.py`
 
 
 ## Update
@@ -119,3 +112,56 @@ To obtain HED (and RCF) edge images:
   
 * 0309
   * ***Allow producing SF, HED and RCF edge image in procedure***
+
+* 0310
+  * Modify directory structure and config to more flexible testing
+
+
+## Sample directory structure 
+Asterisk(*) means auto-generated directory
+```
+PatternCounting
+├── data
+│   ├── colony
+│   │   ├── edge*
+│   │   │   └── SF*
+│   │   └── image
+│   ├── general
+│   │   ├── edge*
+│   │   │   ├── HED*
+│   │   │   ├── RCF*
+│   │   │   └── SF*
+│   │   └── image
+│   └── pigs
+│       ├── edge*
+│       │   ├── HED*
+│       │   ├── RCF*
+│       │   └── SF*
+│       └── image
+├── output*
+│   ├── colony*
+│   ├── general*
+│   └── pigs*
+└── src
+```
+
+```
+src
+├── HED
+│   ├── model.py
+│   ├── pretrained
+│   │   └── network-bsds500.pytorch
+│   └── run_hed.py
+├── RCF
+│   ├── models.py
+│   ├── pretrained
+│   │   ├── RCFcheckpoint_epoch12.pth
+│   │   └── vgg16convs.mat
+│   └── run_rcf.py
+├── SF
+│   ├── model.yml.gz
+│   └── run_sf.py
+├── get_contours.py
+├── get_features.py
+...
+```

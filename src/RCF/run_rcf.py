@@ -84,9 +84,7 @@ def make_rcf(test_list_dir, img_dir):
         print("Running test [%d/%d]" % (idx + 1, len(test_loader)))
 
 
-def make_single_rcf(img_path, img_dir, save_dir):
-    image = cv2.imread(join(img_dir, img_path)).astype(np.float32)
-    img_name = img_path.split('.', 1)[0]
+def make_single_rcf(image, edge_img_path):
     
     # model
     model = RCF()
@@ -111,7 +109,7 @@ def make_single_rcf(img_path, img_dir, save_dir):
     result = torch.squeeze(results[-1].detach()).cpu().numpy()
     result = cv2.resize(result, (0, 0), fx=1/resize_factor, fy=1/resize_factor)
     result = Image.fromarray((result * 255).astype(np.uint8))
-    result.save(join(save_dir, "%s_rcf.png" % img_name))
+    result.save(edge_img_path)
 
 
 if __name__ == '__main__':
