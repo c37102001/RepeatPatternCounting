@@ -116,6 +116,9 @@ For new version
 * 0310
   * Modify directory structure and config to more flexible testing
 
+* 0317
+  * Use solidity for filtering, area and color grad for obviousity voting 
+
 
 ## Sample directory structure 
 Asterisk(*) means auto-generated directory

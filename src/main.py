@@ -108,11 +108,12 @@ def main(img_file):         # img_file = 'IMG_ (33).jpg'
 
     #================================ 1. Get and filter contours  ===================================
 
-
+    # i want to do_enhance
     contours = []
     for edge_type in use_edge:
         edge_type = edge_type.strip()
-        do_enhance = eval(img_cfg[edge_type])
+        do_enhance, close_ks = img_cfg[edge_type].split(',')
+        do_enhance, close_ks = eval(do_enhance), eval(close_ks)
         
         # get edge image
         if edge_type == 'Canny':
@@ -143,7 +144,7 @@ def main(img_file):         # img_file = 'IMG_ (33).jpg'
             edge_img = cv2.resize(edge_img, (0, 0), fx=resize_factor, fy=resize_factor)     # shape: (736, *)
 
         # find and filter contours
-        contours.extend(get_contours(filter_cfg, drawer, edge_img, edge_type, do_enhance, do_draw))
+        contours.extend(get_contours(filter_cfg, drawer, edge_img, edge_type, close_ks, do_enhance, do_draw))
     
     if do_draw or True:
         drawer.save(drawer.draw(contours), '2_CombineCnts')
@@ -228,10 +229,12 @@ def main(img_file):         # img_file = 'IMG_ (33).jpg'
         
         if len(factor_list) == 1:
             obvious_index = 0
+        elif factor == 'area':
+            obvious_index = len(factor_list) - 1
         else:
             diff = np.diff(factor_list)
             obvious_index = np.where(diff == max(diff))[0][0] + 1
-
+            
         obvious_value = factor_list[obvious_index]
 
         thres = obvious_value * thres_param
@@ -241,6 +244,7 @@ def main(img_file):         # img_file = 'IMG_ (33).jpg'
                 thres = 0
             else:
                 thres = max(thres, 90) if factor_list[-1] > 100 else min(thres, 90)
+        
         # thres = min(thres, 90) if factor == 'color_gradient' else thres # TODO
         for i, factor_value in enumerate(factor_list[:obvious_index]):
             if factor_value > thres:
@@ -248,7 +252,11 @@ def main(img_file):         # img_file = 'IMG_ (33).jpg'
                 break
 
         for group in group_dicts[obvious_index:]:
-            group['votes'] += 1
+            # TODO
+            if factor == 'solidity':
+                group['votes'] += 10
+            else:
+                group['votes'] += 1
 
         if do_draw or True:
             img = drawer.blank_img()
@@ -274,6 +282,9 @@ def main(img_file):         # img_file = 'IMG_ (33).jpg'
     obvious_groups = []
     most_votes_group = max(group_dicts, key=lambda x: x['votes'])
     most_votes = most_votes_group['votes']
+
+    # TODO
+    most_votes = 11
     
     for group in group_dicts:
         if group['votes'] >= most_votes:

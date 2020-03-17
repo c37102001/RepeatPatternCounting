@@ -7,12 +7,13 @@ from ipdb import set_trace as pdb
 _gray_value_redistribution_local = True
 
 
-def get_contours(filter_cfg, drawer, edge_img, edge_type, do_enhance=True, do_draw=False):
+def get_contours(filter_cfg, drawer, edge_img, edge_type, close_ks, do_enhance=True, do_draw=False):
     ''' Do contour detection, filter contours, feature extract and cluster.
 
     Args:
         edge_img: (ndarray) edge img element 0~255, sized [736, N]
         edge_type: (str) edge type name
+        close_ks: (int) close kernel size, skip closing if close_ks == 0
         do_enhance: (bool) whether enhance edge img
         do_draw: (bool) whether draw process figures
     
@@ -51,11 +52,12 @@ def get_contours(filter_cfg, drawer, edge_img, edge_type, do_enhance=True, do_dr
         drawer.save(edge_img, desc)
 
     # morphology close
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
-    edge_img = cv2.morphologyEx(edge_img, cv2.MORPH_CLOSE, kernel)
-    if do_draw:
-        desc = f'1_{edge_type}-1-2_closeEdge'
-        drawer.save(edge_img, desc)    
+    if not close_ks == 0:
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (close_ks, close_ks))
+        edge_img = cv2.morphologyEx(edge_img, cv2.MORPH_CLOSE, kernel)
+        if do_draw:
+            desc = f'1_{edge_type}-1-2_closeEdge'
+            drawer.save(edge_img, desc)    
     
     # add edge on border
     edge_img = add_border_edge(edge_img)

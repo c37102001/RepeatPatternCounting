@@ -44,7 +44,7 @@ def is_overlap(cnt1, cnt2):
     if c1c2D < min(c1D, c2D) and min(c1D, c2D) / max(c1D, c2D) > (2 / 3):
         return True
 
-    small_cnt, large_cnt = sorted((cnt1, cnt2), key=len)
+    small_cnt, large_cnt = sorted((cnt1, cnt2), key=cv2.contourArea)
     points_side = [cv2.pointPolygonTest(large_cnt, tuple(point[0]), False) for point in small_cnt]
     if points_side.count(-1) < len(small_cnt) * 0.7:        # if outside points less than 0.7
         return True
