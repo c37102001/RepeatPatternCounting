@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 import math
+import mahotas
 from utils import get_centroid, eucl_distance, scale_contour
 from ipdb import set_trace as pdb
 from tqdm import tqdm
@@ -66,7 +67,7 @@ def get_features(color_img, contours, drawer, do_draw, filter_by_gradient):
 
         # rotate contour pixels to fit main angle and re-calculate pixels' angle.
         pixel_features = rotate_contour(pixel_features, main_angle)
-
+        
         # shape feature
         pixel_distances = [f['distance'] for f in pixel_features]
         dist_sample_step = len(pixel_distances) / sample_number
@@ -81,13 +82,18 @@ def get_features(color_img, contours, drawer, do_draw, filter_by_gradient):
     max_size = max(cnt_size)
     cnt_norm_size = [[size / max_size] for size in cnt_size]
 
-    cnt_avg_lab = [FindCntAvgLAB(contour, color_img) for contour in contours]
+    # color feature
+    cnt_avg_lab = [get_color_feature(contour, color_img) for contour in contours]
+
+    # texture feature
+    cnt_textures = [get_texture_feature(contour, color_img) for contour in contours]
 
     cnt_dic_list = [{
         'cnt': contours[i],
         'shape': cnt_pixel_distances[i],
         'color': cnt_avg_lab[i],
         'size': cnt_norm_size[i],
+        'texture': cnt_textures[i],
         'color_gradient': cnt_color_gradient[i]
     } for i in range(len(contours))]
 
@@ -167,7 +173,7 @@ def rotate_contour(pixel_features, main_angle):
     return pixel_features
 
 
-def FindCntAvgLAB(cnt, img):
+def get_color_feature(cnt, img):
     mask = np.zeros(img.shape[:2], np.uint8)
     # Fill the contour in order to get the inner points
     cv2.drawContours(mask, [cnt], -1, 255, -1)      # thickness=-1: the contour interiors are drawn
@@ -180,3 +186,25 @@ def FindCntAvgLAB(cnt, img):
     avg_lab[0] = avg_lab[0] * 0.5       # lower l chennel
 
     return avg_lab
+
+def get_texture_feature(cnt, img):
+    mask = np.zeros(img.shape[:3], np.uint8)
+    # Fill the contour in order to get the inner points
+    cv2.drawContours(mask, [cnt], -1, (255,255,255), -1)      # thickness=-1: the contour interiors are drawn
+    cv2.drawContours(mask, [cnt], -1, (0,0,0), 1)
+
+    x,y,w,h = cv2.boundingRect(cnt)
+    cnt_img = img[y:y+h, x:x+w]
+    cnt_mask = mask[y:y+h, x:x+w]
+
+    # lower gray scale
+    cnt_img = cv2.cvtColor(cnt_img, cv2.COLOR_BGR2LAB)
+    cnt_img[0] = 0
+    cnt_img = cv2.cvtColor(cnt_img, cv2.COLOR_LAB2BGR)
+    
+    cnt_img = (cnt_img * (cnt_mask / 255)).astype(np.uint8)
+    cnt_img = cv2.cvtColor(cnt_img, cv2.COLOR_BGR2GRAY)
+
+    hara = mahotas.features.haralick(cnt_img).mean(axis=0)  # (13, 4) > (13)
+    
+    return hara

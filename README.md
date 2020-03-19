@@ -117,7 +117,10 @@ For new version
   * Modify directory structure and config to more flexible testing
 
 * 0317
-  * Use solidity for filtering, area and color grad for obviousity voting 
+  * Use solidity for filtering, area and color grad for obviousity voting
+
+* 0319
+  * Add texture feature, but performance drops when using it. Better not to use.
 
 
 ## Sample directory structure 

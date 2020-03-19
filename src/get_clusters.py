@@ -7,13 +7,15 @@ from ipdb import set_trace as pdb
 
 def get_clusters(cluster_cfg, contours, cnt_dicts, drawer, do_draw=False, second=False):
 
+    feature_types = [f.strip() for f in cluster_cfg['feature_types'].split(',')]
+
     # Do hierarchicalclustering by shape, color, and size
     label_dict = {}
-    for feature_type in ['size', 'shape', 'color']:
+    for feature_type in feature_types:
         feature_list = [cnt_dic[feature_type] for cnt_dic in cnt_dicts]
 
         # ndarray e.g. ([1, 1, 1, 1, 1, 3, 3, 2, 2, 2]), len=#feature_list
-        labels = hierarchical_clustering(cluster_cfg, feature_list, feature_type, drawer, do_draw)
+        labels = hierarchical_clustering(cluster_cfg, feature_list, feature_type, drawer, do_draw, second)
         label_dict[feature_type] = labels
 
         if do_draw:
@@ -21,13 +23,17 @@ def get_clusters(cluster_cfg, contours, cnt_dicts, drawer, do_draw=False, second
             for label in set(labels):
                 cnt_dic_list_by_groups = [c for i, c in enumerate(contours) if labels[i] == label]
                 img = drawer.draw_same_color(cnt_dic_list_by_groups, img)
-            desc = f'2-1_{feature_type.capitalize()}Group'
+            if not second:
+                desc = f'2-1_{feature_type.capitalize()}Group'
+            else:
+                desc = f'2-4_2nd{feature_type.capitalize()}Group'
             drawer.save(img, desc)
 
     # combine the label clustered by size, shape, and color. ex: (0,1,1), (2,0,1)
-    combine_labels = []
-    for size, shape, color in zip(label_dict['size'], label_dict['shape'], label_dict['color']):
-        combine_labels.append((size, shape, color))
+    combine_labels=[]
+    for f in feature_types:
+        combine_labels.append(tuple(label_dict[f]))
+    combine_labels = [x for x in zip(*combine_labels)]
 
     # find the final group by the intersected label and draw
     img = drawer.blank_img()
@@ -42,7 +48,7 @@ def get_clusters(cluster_cfg, contours, cnt_dicts, drawer, do_draw=False, second
         img = drawer.draw_same_color(cnts, img)
         
     if do_draw or True:
-        desc = f'2-2_GroupedResult' if not second else f'2-4_SecondGrouped'
+        desc = f'2-2_1stGrouped' if not second else f'2-5_2ndGrouped'
         drawer.save(img, desc)
 
     # add label and group weight(num of cnts in the group) into contour dictionary
@@ -59,7 +65,7 @@ def get_clusters(cluster_cfg, contours, cnt_dicts, drawer, do_draw=False, second
     return cnt_dicts, labels
 
 
-def hierarchical_clustering(cluster_cfg, feature_list, feature_type, drawer, do_draw=False):
+def hierarchical_clustering(cluster_cfg, feature_list, feature_type, drawer, do_draw=False, second=False):
     if len(feature_list) <= 3:
         return [0] * len(feature_list)
 
@@ -76,7 +82,7 @@ def hierarchical_clustering(cluster_cfg, feature_list, feature_type, drawer, do_
     # difference of distance between previous one, sized [#feature - 2]
     diff_list = np.diff(dist_list)
 
-    # ===================  find cut point by max diff ratio ==========================
+    # # ===================  find cut point by max diff ratio ==========================
     # # count avg for those who is larger than all_avg_diff as threshold
     # all_avg_diff = sum(diff_list) / len(diff_list)
     # larger_than_avgs_diffs = [diff for diff in diff_list if diff > all_avg_diff]
@@ -106,8 +112,8 @@ def hierarchical_clustering(cluster_cfg, feature_list, feature_type, drawer, do_
     #     target_diff_idx += 1
     # if target_diff_idx == len(diff_list):
     #     print(f'[{feature_type}] clustering all in one group!')
-    # =========================================================================================
-
+    # target_diff = diff_list[target_diff_idx]
+    # # =========================================================================================
 
     # ===================  find cut point by absolute threshold value==========================
     try:
@@ -117,7 +123,11 @@ def hierarchical_clustering(cluster_cfg, feature_list, feature_type, drawer, do_
         if do_draw:
             plt.bar(x=range(len(diff_list)), height=diff_list)
             plt.title(f'{feature_type} diff plot')
-            save_path = os.path.join(drawer.output_path, f'{drawer.img_name}_2-1_{feature_type.capitalize()}Group.png')
+            if not second:
+                desc = f'{drawer.img_name}_2-1_{feature_type.capitalize()}Group.png'
+            else:
+                desc = f'{drawer.img_name}_2-4_2nd{feature_type.capitalize()}Group.png'
+            save_path = os.path.join(drawer.output_path, desc)
             plt.savefig(save_path)
             plt.close()
         return [0] * len(feature_list)
@@ -132,7 +142,11 @@ def hierarchical_clustering(cluster_cfg, feature_list, feature_type, drawer, do_
     if do_draw:
         plt.bar(x=range(len(diff_list)), height=diff_list)
         plt.title(f'{feature_type} cut idx: {target_diff_idx} | value: {target_diff:.3f}')
-        save_path = os.path.join(drawer.output_path, f'{drawer.img_name}_2-1_{feature_type.capitalize()}Group.png')
+        if not second:
+            desc = f'{drawer.img_name}_2-1_{feature_type.capitalize()}Group.png'
+        else:
+            desc = f'{drawer.img_name}_2-4_2nd{feature_type.capitalize()}Group.png'
+        save_path = os.path.join(drawer.output_path, desc)
         plt.savefig(save_path)
         plt.close()
 
