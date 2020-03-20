@@ -86,14 +86,14 @@ def get_features(color_img, contours, drawer, do_draw, filter_by_gradient):
     cnt_avg_lab = [get_color_feature(contour, color_img) for contour in contours]
 
     # texture feature
-    cnt_textures = [get_texture_feature(contour, color_img) for contour in contours]
+    # cnt_textures = [get_texture_feature(contour, color_img) for contour in contours]
 
     cnt_dic_list = [{
         'cnt': contours[i],
         'shape': cnt_pixel_distances[i],
         'color': cnt_avg_lab[i],
         'size': cnt_norm_size[i],
-        'texture': cnt_textures[i],
+        # 'texture': cnt_textures[i],
         'color_gradient': cnt_color_gradient[i]
     } for i in range(len(contours))]
 
