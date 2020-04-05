@@ -154,7 +154,7 @@ def main(img_file):         # img_file = 'IMG_ (33).jpg'
 
     # Get contour features
     contours, cnt_dicts = get_features(resi_input_img.copy(), contours, drawer, do_draw, filter_by_gradient)
-    
+
     # cluster contours into groups
     cnt_dicts, labels = get_clusters(cluster_cfg, contours, cnt_dicts, drawer, do_draw)
     

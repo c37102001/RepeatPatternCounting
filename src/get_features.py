@@ -1,10 +1,12 @@
 import cv2
+import os
 import numpy as np
 import math
 import mahotas
 from utils import get_centroid, eucl_distance, scale_contour
 from ipdb import set_trace as pdb
 from tqdm import tqdm
+from nn.mobileNet import MobileNet as Model
 
 
 def get_features(color_img, contours, drawer, do_draw, filter_by_gradient):
@@ -88,12 +90,28 @@ def get_features(color_img, contours, drawer, do_draw, filter_by_gradient):
     # texture feature
     # cnt_textures = [get_texture_feature(contour, color_img) for contour in contours]
 
+    # nn feature
+    # model = Model()
+    # nn_features = [get_nn_feature(contour, color_img, model) for contour in contours]
+    
+    # get contour images
+    # img_name = drawer.img_name # 'IMG_ (33)'
+    # img_name = img_name.split('(')[1]   # 33)
+    # img_name = img_name.split(')')[0]   # 33
+    # if not os.path.exists(f'../pattern_imgs/{img_name}'):
+    #     os.makedirs(f'../pattern_imgs/{img_name}')
+    # count = 0
+    # for contour in tqdm(contours, total=len(contours), desc='[Saving imgs]'):
+    #     get_cnt_img(contour, color_img, f'../pattern_imgs/{img_name}/{count}.png')
+    #     count += 1
+
     cnt_dic_list = [{
         'cnt': contours[i],
         'shape': cnt_pixel_distances[i],
         'color': cnt_avg_lab[i],
         'size': cnt_norm_size[i],
         # 'texture': cnt_textures[i],
+        # 'nn': nn_features[i],
         'color_gradient': cnt_color_gradient[i]
     } for i in range(len(contours))]
 
@@ -208,3 +226,52 @@ def get_texture_feature(cnt, img):
     hara = mahotas.features.haralick(cnt_img).mean(axis=0)  # (13, 4) > (13)
     
     return hara
+
+# def get_nn_feature(cnt, img, model):
+#     x,y,w,h = cv2.boundingRect(cnt)
+#     cnt_img = img[y:y+h, x:x+w]
+#     nn_feature = model.get_feature(cnt_img)
+    
+#     return nn_feature
+
+def get_nn_feature(cnt, img, model):
+    mask = np.zeros(img.shape[:3], np.uint8)
+    # Fill the contour in order to get the inner points
+    cv2.drawContours(mask, [cnt], -1, (255,255,255), -1)      # thickness=-1: the contour interiors are drawn
+    cv2.drawContours(mask, [cnt], -1, (0,0,0), 1)
+
+    x,y,w,h = cv2.boundingRect(cnt)
+    cnt_img = img[y:y+h, x:x+w]
+    cnt_mask = mask[y:y+h, x:x+w]
+    
+    cnt_img = (cnt_img * (cnt_mask / 255)).astype(np.uint8)
+    nn_feature = model.get_feature(cnt_img)
+    
+    return nn_feature
+
+
+def make_tsne(fts, n):
+    from sklearn.manifold import TSNE
+    from matplotlib import pyplot as plt
+    tsne = TSNE(n_components=n, init='pca')
+    x = tsne.fit_transform(fts)
+    
+    plt.figure()
+    plt.scatter(x[:,0], x[:,1])
+    plt.xticks([])
+    plt.yticks([])
+    plt.savefig('TSNE.png')
+
+
+def get_cnt_img(cnt, img, save_dir):
+    mask = np.zeros(img.shape[:3], np.uint8)
+    # Fill the contour in order to get the inner points
+    cv2.drawContours(mask, [cnt], -1, (255,255,255), -1)      # thickness=-1: the contour interiors are drawn
+    # cv2.drawContours(mask, [cnt], -1, (0,0,0), 1)
+
+    x,y,w,h = cv2.boundingRect(cnt)
+    cnt_img = img[y:y+h, x:x+w]
+    cnt_mask = mask[y:y+h, x:x+w]
+    
+    cnt_img = (cnt_img * (cnt_mask / 255)).astype(np.uint8)
+    cv2.imwrite(save_dir, cnt_img)
