@@ -74,7 +74,9 @@ def hierarchical_clustering(cluster_cfg, feature_list, feature_type, drawer, do_
     
     # hierarchically link features by order of distance(measured by 'ward'), output a hierarchical tree
     # return ndarray sized [#feature_list-1, 4], 4 means (group idx1, gp idx2, gp_distance, included ele num)
-    feature_dist_hierarchy = linkage(feature_list, 'ward')
+
+    method = 'ward' if feature_type == 'encoding' else 'ward'
+    feature_dist_hierarchy = linkage(feature_list, method)
         
     # distance between every two groups, sized [#feature - 1]
     dist_list = feature_dist_hierarchy[:, 2]

@@ -30,19 +30,20 @@ def get_cifar_dataset():
 
 def get_pattern_dataset():
     transform_train = transforms.Compose([
-        transforms.Resize((32, 32)),
+        transforms.Pad(32),
+        transforms.CenterCrop((32, 32)),
+
         transforms.RandomAffine(20),
         transforms.RandomVerticalFlip(),
         transforms.RandomHorizontalFlip(),
         transforms.RandomRotation(45),
         transforms.ToTensor(),
-        # transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
     ])
 
     transform_test = transforms.Compose([
-        transforms.Resize((32, 32)),
+        transforms.Pad(32),
+        transforms.CenterCrop((32, 32)),
         transforms.ToTensor(),
-        # transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
     ])
 
     trainset = ImageFolder('./data/pattern_imgs/train_data', transform=transform_train)

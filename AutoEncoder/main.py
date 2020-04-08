@@ -18,7 +18,7 @@ def _parse_args():
     parser.add_argument('--batch_size', default=256, type=int)
     parser.add_argument('--lr', default=1e-3, type=float)
     parser.add_argument('--wd', default=1e-5, type=float)
-    parser.add_argument('--max_epoch', default=500, type=int)
+    parser.add_argument('--max_epoch', default=90, type=int)
     parser.add_argument('--cuda', default=1, type=int)
     parser.add_argument('--resume', '-r', action='store_true', help='resume from checkpoint')
     args = parser.parse_args()
@@ -75,7 +75,7 @@ def main(args):
         cifar_train_loader = DataLoader(cifar_trainset, batch_size=row_size, shuffle=True)
         cifar_test_loader = DataLoader(cifar_testset, batch_size=row_size, shuffle=True)
         
-        imgs_tensor, _ = next(iter(pattern_test_loader))         # (b, 3, 32, 32)    (B, C, H, W)
+        imgs_tensor, _ = next(iter(cifar_test_loader))         # (b, 3, 32, 32)    (B, C, H, W)
         imgs_np = imgs_tensor.numpy().transpose(0, 2, 3, 1)    # (b, 32, 32, 3)    (B, H, W, C)
 
         # plot origin images

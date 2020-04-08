@@ -6,7 +6,10 @@ import mahotas
 from utils import get_centroid, eucl_distance, scale_contour
 from ipdb import set_trace as pdb
 from tqdm import tqdm
-from nn.mobileNet import MobileNet as Model
+from nn.model import ResAE as Model
+import torch
+import torchvision.transforms as transforms
+import matplotlib.pyplot as plt
 
 
 def get_features(color_img, contours, drawer, do_draw, filter_by_gradient):
@@ -90,21 +93,54 @@ def get_features(color_img, contours, drawer, do_draw, filter_by_gradient):
     # texture feature
     # cnt_textures = [get_texture_feature(contour, color_img) for contour in contours]
 
-    # nn feature
-    # model = Model()
-    # nn_features = [get_nn_feature(contour, color_img, model) for contour in contours]
-    
-    # get contour images
-    # img_name = drawer.img_name # 'IMG_ (33)'
-    # img_name = img_name.split('(')[1]   # 33)
-    # img_name = img_name.split(')')[0]   # 33
-    # if not os.path.exists(f'../pattern_imgs/{img_name}'):
-    #     os.makedirs(f'../pattern_imgs/{img_name}')
-    # count = 0
-    # for contour in tqdm(contours, total=len(contours), desc='[Saving imgs]'):
-    #     get_cnt_img(contour, color_img, f'../pattern_imgs/{img_name}/{count}.png')
-    #     count += 1
+    # ==============================================================================
 
+    # get contour images
+    img_name = drawer.img_name # 'IMG_ (33)'
+    img_name = img_name.split('(')[1]   # 33)
+    img_name = img_name.split(')')[0]   # 33
+    if not os.path.exists(f'../pattern_imgs/{img_name}'):
+        os.makedirs(f'../pattern_imgs/{img_name}')
+    
+    count = 0
+    cnt_imgs = []
+    for contour in tqdm(contours, total=len(contours), desc='[Saving imgs]'):
+        cnt_imgs.append(get_cnt_img(contour, color_img, f'../pattern_imgs/{img_name}/{count}.png'))
+        count += 1
+    cnt_imgs = torch.stack(cnt_imgs)       # (#, 3, 32, 32)
+    
+    # AE
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model = Model()
+    model.load_state_dict(torch.load(f'nn/model.ckpt'))
+    model.to(device)
+    model.eval()
+    cnt_encodings, cnt_recons = model(cnt_imgs.to(device))  # (#, 512, 1, 1)    (#, 3, 32, 32)
+    cnt_encodings = cnt_encodings.view(cnt_imgs.size(0), 512).cpu().numpy()   # (#, 512)
+    
+    sample_index = np.random.randint(0, cnt_imgs.size(0), size=6)
+    plt.figure(figsize=(10,4))
+    # plot origin images
+    imgs_np = cnt_imgs[sample_index].numpy().transpose(0, 2, 3, 1)    # (b, 32, 32, 3)    (B, H, W, C)
+    for i, img in enumerate(imgs_np):
+        plt.subplot(2, 6, i+1, xticks=[], yticks=[])
+        plt.imshow(img)
+
+    cnt_recons = cnt_recons.clamp(0, 1).cpu().detach().numpy()  # (#, 32, 32, 3)
+    cnt_recons = cnt_recons.transpose(0, 2, 3, 1)
+    for i, img in enumerate(cnt_recons[sample_index]):
+        plt.subplot(2, 6, 6+i+1, xticks=[], yticks=[])
+        plt.imshow(img)
+    
+    plt.tight_layout()
+    plt.savefig('reconstruct.png')
+    plt.clf()
+    make_tsne(cnt_encodings)
+    make_pca(cnt_encodings)
+    make_3dpca(cnt_encodings)
+    
+    # ==============================================================================
+    
     cnt_dic_list = [{
         'cnt': contours[i],
         'shape': cnt_pixel_distances[i],
@@ -112,6 +148,7 @@ def get_features(color_img, contours, drawer, do_draw, filter_by_gradient):
         'size': cnt_norm_size[i],
         # 'texture': cnt_textures[i],
         # 'nn': nn_features[i],
+        'encoding': cnt_encodings[i],   # (512,)
         'color_gradient': cnt_color_gradient[i]
     } for i in range(len(contours))]
 
@@ -227,12 +264,6 @@ def get_texture_feature(cnt, img):
     
     return hara
 
-# def get_nn_feature(cnt, img, model):
-#     x,y,w,h = cv2.boundingRect(cnt)
-#     cnt_img = img[y:y+h, x:x+w]
-#     nn_feature = model.get_feature(cnt_img)
-    
-#     return nn_feature
 
 def get_nn_feature(cnt, img, model):
     mask = np.zeros(img.shape[:3], np.uint8)
@@ -250,7 +281,8 @@ def get_nn_feature(cnt, img, model):
     return nn_feature
 
 
-def make_tsne(fts, n):
+def make_tsne(fts, n=2):
+    print('[*] Making TSNE...')
     from sklearn.manifold import TSNE
     from matplotlib import pyplot as plt
     tsne = TSNE(n_components=n, init='pca')
@@ -258,12 +290,52 @@ def make_tsne(fts, n):
     
     plt.figure()
     plt.scatter(x[:,0], x[:,1])
-    plt.xticks([])
-    plt.yticks([])
+    plt.title('T-SNE of contour encodings')
     plt.savefig('TSNE.png')
+    plt.clf()
+
+    return x
+
+
+def make_pca(fts, n=2):
+    print('[*] Making 2D PCA...')
+    from sklearn.decomposition import PCA
+    from matplotlib import pyplot as plt
+    pca = PCA(n_components=n)
+    x = pca.fit_transform(fts)
+    
+    plt.figure()
+    plt.scatter(x[:,0], x[:,1])
+    plt.title('PCA of contour encodings')
+    plt.savefig('PCA_2d.png')
+    plt.clf()
+
+    return x
+
+
+def make_3dpca(fts, n=3):
+    print('[*] Making 3D PCA...')
+    from sklearn.decomposition import PCA
+    from matplotlib import pyplot as plt
+    from mpl_toolkits.mplot3d import Axes3D
+    pca = PCA(n_components=n)
+    x = pca.fit_transform(fts)
+    
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    ax.scatter(x[:,0], x[:,1], x[:,2], marker='o')
+    ax.set_xlabel('X-axis')
+    ax.set_ylabel('Y-axis')
+    ax.set_zlabel('Z-axis')
+    plt.title('PCA of contour encodings')
+    plt.savefig('PCA_3d.png')
+    plt.clf()
+
+    return x
 
 
 def get_cnt_img(cnt, img, save_dir):
+
     mask = np.zeros(img.shape[:3], np.uint8)
     # Fill the contour in order to get the inner points
     cv2.drawContours(mask, [cnt], -1, (255,255,255), -1)      # thickness=-1: the contour interiors are drawn
@@ -274,4 +346,23 @@ def get_cnt_img(cnt, img, save_dir):
     cnt_mask = mask[y:y+h, x:x+w]
     
     cnt_img = (cnt_img * (cnt_mask / 255)).astype(np.uint8)
-    cv2.imwrite(save_dir, cnt_img)
+    # draw white contour
+    new_cnt = cnt - np.array([x, y])
+    cv2.drawContours(cnt_img, [new_cnt], -1, (255,255,255), 1)
+    
+    resize_factor = 32 / max(cnt_img.shape[:2])
+    cnt_img = cv2.resize(cnt_img, (0, 0), fx=resize_factor, fy=resize_factor)
+    # cv2.imwrite(save_dir, cnt_img)
+    # cv2.imwrite('before.png', cnt_img)
+
+    transform = transforms.Compose([
+        transforms.ToPILImage(),
+        transforms.Pad(32),
+        transforms.CenterCrop((32, 32)),
+        transforms.ToTensor(),])
+
+    cnt_img = transform(cnt_img)
+
+    # cnt_img = cnt_img.numpy().transpose(1, 2, 0) * 255    # (C, H, W) > (H, W, C)
+    # cv2.imwrite('after.png', cnt_img)
+    return cnt_img

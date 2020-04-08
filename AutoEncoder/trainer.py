@@ -21,7 +21,7 @@ class Trainer:
         self.model.to(self.device)
         self.criterion = nn.MSELoss()
         self.opt = torch.optim.Adam(self.model.parameters(), lr=lr)
-        self.scheduler = StepLR(self.opt, step_size=100, gamma=0.5)
+        self.scheduler = StepLR(self.opt, step_size=50, gamma=0.1)
         self.history = {'train_loss':[], 'valid_loss':[]}
         self.min_loss = math.inf
         same_seeds(73)

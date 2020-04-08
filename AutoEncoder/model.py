@@ -4,6 +4,7 @@ import torch.nn.functional as F
 from ipdb import set_trace as pdb
 from resnet import ResNet18
 
+
 class AE(nn.Module):
     def __init__(self):
         super(AE, self).__init__()
