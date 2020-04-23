@@ -70,17 +70,17 @@ def get_contours(filter_cfg, drawer, edge_img, edge_type, close_ks, do_enhance=T
         desc = f'1_{edge_type}-2_OriginContour'
         drawer.save(img, desc)
     
-    # filter contours that has children (outer overlap contour)
-    inner_contours = []
-    for contour, has_child in zip(contours, hierarchy[0,:,2]):
-        if has_child == -1:
-            inner_contours.append(contour)
-    contours = inner_contours
-    print(f'[{edge_type}] # after removing overlapped: {len(contours)}')
-    if do_draw:
-        img = drawer.draw(contours)
-        desc = f'1_{edge_type}-3_RemovedOuter'
-        drawer.save(img, desc)
+    # # filter contours that has children (outer overlap contour)
+    # inner_contours = []
+    # for contour, has_child in zip(contours, hierarchy[0,:,2]):
+    #     if has_child == -1:
+    #         inner_contours.append(contour)
+    # contours = inner_contours
+    # print(f'[{edge_type}] # after removing overlapped: {len(contours)}')
+    # if do_draw:
+    #     img = drawer.draw(contours)
+    #     desc = f'1_{edge_type}-3_RemovedOuter'
+    #     drawer.save(img, desc)
     
     # filter contours by area, perimeter, convex property
     height, width = drawer.color_img.shape[:2]

@@ -48,8 +48,14 @@ elif eval(path_cfg['clear_results']):
     shutil.rmtree(output_path)
     os.makedirs(output_path)
 
-csv_output = path_cfg['csv_output']
-evaluate_csv_path = path_cfg['evaluate_csv_path']
+# eval config
+eval_cfg = cfg['evaluate']
+do_eval = eval(eval_cfg['do_eval'])
+eval_csv_path = eval_cfg['eval_csv_path']
+output_csv_path = os.path.join(eval_csv_path, 'eval.csv')
+if not os.path.exists(output_csv_path):
+    with open(output_csv_path, 'w+') as f:
+        f.write('Image name,TP,FP,FN,Precision,Recall,F_measure,Error_rate\n')
 
 
 # architecture config
@@ -83,10 +89,6 @@ area_thres = eval(obvs_cfg['area_thres'])
 solidity_thres = eval(obvs_cfg['solidity_thres'])
 gradient_thres = eval(obvs_cfg['gradient_thres'])
 
-# evaluate config
-eval_cfg = cfg['evaluate']
-evaluate = eval(eval_cfg['evaluate'])
-evaluation_csv = eval_cfg['evaluation_csv'].split(',')
 
 
 def main(img_file):         # img_file = 'IMG_ (33).jpg'
@@ -95,8 +97,8 @@ def main(img_file):         # img_file = 'IMG_ (33).jpg'
     
 
     img_name, img_ext = img_file.rsplit('.', 1)     # ['IMG_ (33)',  'jpg']
-
     input_img = cv2.imread(img_path + img_file)
+    
     img_height = input_img.shape[0]               # shape: (1365, 2048, 3)
     resize_factor = resize_height / img_height  # resize_height=736, shape: (1365, 2048, 3) -> (736,1104,3)
     resi_input_img = cv2.resize(input_img, (0, 0), fx=resize_factor, fy=resize_factor)
@@ -142,7 +144,7 @@ def main(img_file):         # img_file = 'IMG_ (33).jpg'
 
             edge_img = cv2.imread(edge_img_path, cv2.IMREAD_GRAYSCALE)
             edge_img = cv2.resize(edge_img, (0, 0), fx=resize_factor, fy=resize_factor)     # shape: (736, *)
-
+        
         # find and filter contours
         contours.extend(get_contours(filter_cfg, drawer, edge_img, edge_type, close_ks, do_enhance, do_draw))
     
@@ -302,15 +304,24 @@ def main(img_file):         # img_file = 'IMG_ (33).jpg'
     img = np.concatenate((input_img, img), axis=1)
     drawer.save(img, '5_FinalResult')
 
+    # draw all contours result
+    img = resi_input_img / 3.0    # darken the image to make the contour visible
+    for group in group_dicts:
+        img = drawer.draw_same_color(group['group_cnts'], img)
+    img = cv2.resize(img, (0, 0), fx=1/resize_factor, fy=1/resize_factor)
+    img = np.concatenate((input_img, img), axis=1)
+    drawer.save(img, '5_FinalResult_AllCnts')
     
 
     print('-----------------------------------------------------------')
 
-    if evaluate:
-        resize_ratio = resize_height / float(img_height)
-        tp, fp, fn, pr, re, fm, er = evaluate_detection_performance(img, img_name, group_cnts,
-                                                                    resize_ratio, evaluate_csv_path)
-        evaluation_csv.append([img_name, tp, fp, fn, pr, re, fm, er])
+    if do_eval:
+        tp, fp, fn, pr, re, fm, er = evaluate_detection_performance(
+            resi_input_img.copy(), img_file, group_cnts, resize_factor, eval_csv_path)
+        
+        with open(output_csv_path, 'a+') as f:
+            writer = csv.writer(f)
+            writer.writerow([img_file, tp, fp, fn, pr, re, fm, er])
 
 
 total_start = time.time()

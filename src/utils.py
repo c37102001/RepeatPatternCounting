@@ -4,6 +4,7 @@ import math
 from ipdb import set_trace as pdb
 import itertools
 from tqdm import tqdm
+import csv
 
 
 def add_border_edge(edge_img):
@@ -75,18 +76,18 @@ def remove_group_overlap(cnt_dicts, labels, drawer, do_draw):
                 # if different label and areas are similar, keep larger weight one.
                 # if areas are quite different, keep them both
                 elif 0.2 <= (cv2.contourArea(dict_i['cnt']) / cv2.contourArea(dict_j['cnt'])) <= 5:
-                    grads_i = [d['color_gradient'] for d in cnt_dicts if d['label']==dict_i['label']]
-                    mean_grad_i = sum(grads_i) / len(grads_i)
-                    grads_j = [d['color_gradient'] for d in cnt_dicts if d['label']==dict_j['label']]
-                    mean_grad_j = sum(grads_j) / len(grads_j)
-                    if mean_grad_i > mean_grad_j:
+                    # grads_i = [d['color_gradient'] for d in cnt_dicts if d['label']==dict_i['label']]
+                    # mean_grad_i = sum(grads_i) / len(grads_i)
+                    # grads_j = [d['color_gradient'] for d in cnt_dicts if d['label']==dict_j['label']]
+                    # mean_grad_j = sum(grads_j) / len(grads_j)
+                    # if mean_grad_i > mean_grad_j:
+                    #     dict_j['group_weight'] = 0
+                    # else:
+                    #     dict_i['group_weight'] = 0
+                    if dict_i['group_weight'] > dict_j['group_weight']:
                         dict_j['group_weight'] = 0
                     else:
                         dict_i['group_weight'] = 0
-                    # if dict_i['group_weight'] > dict_j['group_weight']:
-                        # dict_j['group_weight'] = 0
-                    # else:
-                        # dict_i['group_weight'] = 0
     # draw
     cnt_dicts = [cnt_dict for cnt_dict in cnt_dicts if cnt_dict['group_weight'] > 0]
     labels = [cnt_dict['label'] for cnt_dict in cnt_dicts]
@@ -140,7 +141,7 @@ def filter_small_group(cnt_dicts, labels, drawer, do_draw, ratio=0.1):
     return cnt_dicts, labels
 
 
-def evaluate_detection_performance(img, fileName, final_group_cnt, resize_ratio, evaluate_csv_path):
+def evaluate_detection_performance(img, img_file, final_group_cnt, resize_factor, evaluate_csv_path):
     '''
     Evaluation during run time.
     The evaluation is about if the contours are
@@ -150,7 +151,9 @@ def evaluate_detection_performance(img, fileName, final_group_cnt, resize_ratio,
     @param
     evaluate_csv_path : read the groundtruth data
     '''
-
+    ori_img_height, ori_img_width = img.shape[0]/resize_factor, img.shape[1]/resize_factor
+    # resize_factor = 736 / 720
+    resize_factor = (ori_img_width / 1200) * (736 / ori_img_height)
     tp = 0
     fp = 0
     fn = 0
@@ -162,12 +165,12 @@ def evaluate_detection_performance(img, fileName, final_group_cnt, resize_ratio,
     er = 0.0
     groundtruth_list = []
     translate_list = [['Group', 'Y', 'X']]
-    with open(evaluate_csv_path + fileName + '.csv') as csvfile:
+    with open(evaluate_csv_path + img_file + '.csv') as csvfile:
         reader = csv.DictReader(csvfile)
         for row in reader:
-            # groundtruth_list.append( { 'Group':int(row['Group']), 'X':int(int(row['X'])*resize_ratio), 'Y':int(int(row['Y'])*resize_ratio) } )
-            groundtruth_list.append({'Group': int(row['Group']), 'X': int(row['X']), 'Y': int(row['Y'])})
-
+            groundtruth_list.append({'Group': int(row['Group']), 
+                                     'X': int(eval(row['X']) * resize_factor), 
+                                     'Y': int(eval(row['Y']) * resize_factor)})
     cnt_area_coordinate = Get_Cnt_Area_Coordinate(img, final_group_cnt)
     cnt_area_coordinate.sort(key=lambda x: len(x), reverse=False)
 
@@ -184,19 +187,14 @@ def evaluate_detection_performance(img, fileName, final_group_cnt, resize_ratio,
     If g_dic is in cnt_dic (which means one of the groundtruth contours matches one of the contours that the program found),
     save both label of cnt_dic and the coordinate of g_dic in the translate list.
     '''
+    counted_cnt_dics = []
     for g_dic in groundtruth_list:
         for cnt_dic in cnt_area_coordinate:
-            if [int(g_dic['Y'] * resize_ratio), int(g_dic['X'] * resize_ratio)] in cnt_dic['coordinate']:
+            if [int(g_dic['Y']), int(g_dic['X'])] in cnt_dic and cnt_dic not in counted_cnt_dics:
                 tp += 1
-                cnt_area_coordinate.remove(cnt_dic)
-                translate_list.append([cnt_dic['label'], g_dic['Y'], g_dic['X']])
+                counted_cnt_dics.append(cnt_dic)
+                translate_list.append([g_dic['Group'], g_dic['Y'], g_dic['X']])
                 break
-
-    '''Make a csv that save the translate list.'''
-    f = open(csv_output + fileName[:-4] + '.csv', "wb")
-    w = csv.writer(f)
-    w.writerows(translate_list)
-    f.close()
 
     fp = program_count - tp
     fn = groundtruth_count - tp
@@ -209,7 +207,7 @@ def evaluate_detection_performance(img, fileName, final_group_cnt, resize_ratio,
         fm = 2 * pr * re / (pr + re)
     if groundtruth_count > 0:
         er = abs(program_count - groundtruth_count) / float(groundtruth_count)
-    print(program_count, groundtruth_count)
+    print(tp, groundtruth)
     return tp, fp, fn, pr, re, fm, er
     # _____________________1 st evaluation end__________________________________________________
 

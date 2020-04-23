@@ -122,6 +122,10 @@ For new version
 * 0319
   * Add texture feature, but performance drops when using it. Better not to use.
 
+* 0423
+  * Evaluation
+  * Remove "Outer contour filter" Algorithm
+
 
 ## Sample directory structure 
 Asterisk(*) means auto-generated directory

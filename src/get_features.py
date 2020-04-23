@@ -2,13 +2,10 @@ import cv2
 import os
 import numpy as np
 import math
-import mahotas
 from utils import get_centroid, eucl_distance, scale_contour
 from ipdb import set_trace as pdb
 from tqdm import tqdm
-from nn.model import ResAE as Model
 import torch
-import torchvision.transforms as transforms
 import matplotlib.pyplot as plt
 
 
@@ -93,63 +90,73 @@ def get_features(color_img, contours, drawer, do_draw, filter_by_gradient):
     # texture feature
     # cnt_textures = [get_texture_feature(contour, color_img) for contour in contours]
 
-    # ==============================================================================
+    # # ==============================================================================
 
-    # get contour images
-    img_name = drawer.img_name # 'IMG_ (33)'
-    img_name = img_name.split('(')[1]   # 33)
-    img_name = img_name.split(')')[0]   # 33
-    if not os.path.exists(f'../pattern_imgs/{img_name}'):
-        os.makedirs(f'../pattern_imgs/{img_name}')
+    # # get contour images
+    # img_name = drawer.img_name # 'IMG_ (33)'
+    # img_name = img_name.split('(')[1]   # 33)
+    # img_name = img_name.split(')')[0]   # 33
+    # if not os.path.exists(f'../pattern_imgs/{img_name}'):
+    #     os.makedirs(f'../pattern_imgs/{img_name}')
     
-    count = 0
-    cnt_imgs = []
-    for contour in tqdm(contours, total=len(contours), desc='[Saving imgs]'):
-        cnt_imgs.append(get_cnt_img(contour, color_img, f'../pattern_imgs/{img_name}/{count}.png'))
-        count += 1
-    cnt_imgs = torch.stack(cnt_imgs)       # (#, 3, 32, 32)
+    # count = 0
+    # cnt_imgs = []
+    # for contour in tqdm(contours, total=len(contours), desc='[Saving imgs]'):
+    #     cnt_imgs.append(get_cnt_img(contour, color_img, f'../pattern_imgs/{img_name}/{count}.png'))
+    #     count += 1
+    # cnt_imgs = torch.stack(cnt_imgs)       # (#, 8, 3, 32, 32)
     
-    # AE
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model = Model()
-    model.load_state_dict(torch.load(f'nn/model.ckpt'))
-    model.to(device)
-    model.eval()
-    cnt_encodings, cnt_recons = model(cnt_imgs.to(device))  # (#, 512, 1, 1)    (#, 3, 32, 32)
-    cnt_encodings = cnt_encodings.view(cnt_imgs.size(0), 512).cpu().numpy()   # (#, 512)
-    
-    sample_index = np.random.randint(0, cnt_imgs.size(0), size=6)
-    plt.figure(figsize=(10,4))
-    # plot origin images
-    imgs_np = cnt_imgs[sample_index].numpy().transpose(0, 2, 3, 1)    # (b, 32, 32, 3)    (B, H, W, C)
-    for i, img in enumerate(imgs_np):
-        plt.subplot(2, 6, i+1, xticks=[], yticks=[])
-        plt.imshow(img)
+    # # AE
+    # from nn.model import ResAE as Model
+    # print('[Loading model]')
+    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    # model = Model()
+    # model.load_state_dict(torch.load(f'nn/model.ckpt'))
+    # model.to(device)
+    # model.eval()
 
-    cnt_recons = cnt_recons.clamp(0, 1).cpu().detach().numpy()  # (#, 32, 32, 3)
-    cnt_recons = cnt_recons.transpose(0, 2, 3, 1)
-    for i, img in enumerate(cnt_recons[sample_index]):
-        plt.subplot(2, 6, 6+i+1, xticks=[], yticks=[])
-        plt.imshow(img)
+    # cnt_encodings = []
+    # cnt_recons = []
+    # for cnt_img in tqdm(cnt_imgs, total=len(cnt_imgs), desc='[Extracting encodings]'):  # (8, 3, 32, 32)
+    #     cnt_encoding, cnt_recon = model(cnt_img.to(device))    # (8, 512, 1, 1)    (8, 3, 32, 32)
+    #     cnt_encoding = cnt_encoding.sum(dim=0).view(-1)        # (512)
+    #     cnt_encodings.append(cnt_encoding.cpu().numpy())
+    #     cnt_recons.append(cnt_recon[0])
+    # cnt_encodings = np.array(cnt_encodings)                     # (#, 512)
+    # cnt_recons = torch.stack(cnt_recons)                        # (#, 3, 32, 32)
     
-    plt.tight_layout()
-    plt.savefig('reconstruct.png')
-    plt.clf()
-    make_tsne(cnt_encodings)
-    make_pca(cnt_encodings)
-    make_3dpca(cnt_encodings)
+    # sample_index = np.random.randint(0, cnt_imgs.size(0), size=6)
+    # plt.figure(figsize=(10,4))
+    # # plot origin images
+    # imgs_np = cnt_imgs[sample_index, 0].numpy().transpose(0, 2, 3, 1)    # (b, 32, 32, 3)    (B, H, W, C)
+    # for i, img in enumerate(imgs_np):
+    #     plt.subplot(2, 6, i+1, xticks=[], yticks=[])
+    #     plt.imshow(img)
+
+    # cnt_recons = cnt_recons.clamp(0, 1).cpu().detach().numpy()  # (#, 32, 32, 3)
+    # cnt_recons = cnt_recons.transpose(0, 2, 3, 1)
+    # for i, img in enumerate(cnt_recons[sample_index]):
+    #     plt.subplot(2, 6, 6+i+1, xticks=[], yticks=[])
+    #     plt.imshow(img)
     
-    # ==============================================================================
+    # plt.tight_layout()
+    # plt.savefig('reconstruct.png')
+    # plt.clf()
+    # make_tsne(cnt_encodings)
+    # make_pca(cnt_encodings)
+    # make_3Dpca(cnt_encodings)
+    
+    # # ==============================================================================
     
     cnt_dic_list = [{
         'cnt': contours[i],
         'shape': cnt_pixel_distances[i],
         'color': cnt_avg_lab[i],
         'size': cnt_norm_size[i],
+        'color_gradient': cnt_color_gradient[i],
         # 'texture': cnt_textures[i],
         # 'nn': nn_features[i],
-        'encoding': cnt_encodings[i],   # (512,)
-        'color_gradient': cnt_color_gradient[i]
+        # 'encoding': cnt_encodings[i],   # (512,)
     } for i in range(len(contours))]
 
     return contours, cnt_dic_list
@@ -242,6 +249,7 @@ def get_color_feature(cnt, img):
 
     return avg_lab
 
+
 def get_texture_feature(cnt, img):
     mask = np.zeros(img.shape[:3], np.uint8)
     # Fill the contour in order to get the inner points
@@ -260,6 +268,7 @@ def get_texture_feature(cnt, img):
     cnt_img = (cnt_img * (cnt_mask / 255)).astype(np.uint8)
     cnt_img = cv2.cvtColor(cnt_img, cv2.COLOR_BGR2GRAY)
 
+    import mahotas
     hara = mahotas.features.haralick(cnt_img).mean(axis=0)  # (13, 4) > (13)
     
     return hara
@@ -313,7 +322,7 @@ def make_pca(fts, n=2):
     return x
 
 
-def make_3dpca(fts, n=3):
+def make_3Dpca(fts, n=3):
     print('[*] Making 3D PCA...')
     from sklearn.decomposition import PCA
     from matplotlib import pyplot as plt
@@ -348,21 +357,33 @@ def get_cnt_img(cnt, img, save_dir):
     cnt_img = (cnt_img * (cnt_mask / 255)).astype(np.uint8)
     # draw white contour
     new_cnt = cnt - np.array([x, y])
-    cv2.drawContours(cnt_img, [new_cnt], -1, (255,255,255), 1)
-    
-    resize_factor = 32 / max(cnt_img.shape[:2])
-    cnt_img = cv2.resize(cnt_img, (0, 0), fx=resize_factor, fy=resize_factor)
+    cv2.drawContours(cnt_img, [new_cnt], -1, (255,255,255), 3)
     # cv2.imwrite(save_dir, cnt_img)
     # cv2.imwrite('before.png', cnt_img)
 
-    transform = transforms.Compose([
-        transforms.ToPILImage(),
-        transforms.Pad(32),
-        transforms.CenterCrop((32, 32)),
-        transforms.ToTensor(),])
+    
+    import torchvision.transforms as transforms
+    cnt_imgs = []
+    for angle in range(0, 360, 45):
+        rotate_transform = transforms.Compose([
+            transforms.ToPILImage(),
+            transforms.RandomRotation((angle, angle), expand=True)
+        ])
+        tran_img = rotate_transform(cnt_img)
+        
+        resize_factor = 32 / max(tran_img.size)
+        resize_transform = transforms.Compose([
+            transforms.Resize((int(tran_img.size[0]*resize_factor), int(tran_img.size[1]*resize_factor))),
+            transforms.Pad(32),
+            transforms.CenterCrop((32, 32)),
+            transforms.ToTensor(),])
+        tran_img = resize_transform(tran_img)
 
-    cnt_img = transform(cnt_img)
-
-    # cnt_img = cnt_img.numpy().transpose(1, 2, 0) * 255    # (C, H, W) > (H, W, C)
+        cnt_imgs.append(tran_img)
+    cnt_imgs = torch.stack(cnt_imgs)    # (8, 3, 32, 32)
+    
+    # cnt_img = cnt_imgs[0].numpy().transpose(1, 2, 0) * 255    # (C, H, W) > (H, W, C)
     # cv2.imwrite('after.png', cnt_img)
-    return cnt_img
+    
+    return cnt_imgs
+
