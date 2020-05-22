@@ -87,66 +87,6 @@ def get_features(color_img, contours, drawer, do_draw, filter_by_gradient):
     # color feature
     cnt_avg_lab = [get_color_feature(contour, color_img) for contour in contours]
 
-    # texture feature
-    # cnt_textures = [get_texture_feature(contour, color_img) for contour in contours]
-
-    # # ==============================================================================
-
-    # # get contour images
-    # img_name = drawer.img_name # 'IMG_ (33)'
-    # img_name = img_name.split('(')[1]   # 33)
-    # img_name = img_name.split(')')[0]   # 33
-    # if not os.path.exists(f'../pattern_imgs/{img_name}'):
-    #     os.makedirs(f'../pattern_imgs/{img_name}')
-    
-    # count = 0
-    # cnt_imgs = []
-    # for contour in tqdm(contours, total=len(contours), desc='[Saving imgs]'):
-    #     cnt_imgs.append(get_cnt_img(contour, color_img, f'../pattern_imgs/{img_name}/{count}.png'))
-    #     count += 1
-    # cnt_imgs = torch.stack(cnt_imgs)       # (#, 8, 3, 32, 32)
-    
-    # # AE
-    # from nn.model import ResAE as Model
-    # print('[Loading model]')
-    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    # model = Model()
-    # model.load_state_dict(torch.load(f'nn/model.ckpt'))
-    # model.to(device)
-    # model.eval()
-
-    # cnt_encodings = []
-    # cnt_recons = []
-    # for cnt_img in tqdm(cnt_imgs, total=len(cnt_imgs), desc='[Extracting encodings]'):  # (8, 3, 32, 32)
-    #     cnt_encoding, cnt_recon = model(cnt_img.to(device))    # (8, 512, 1, 1)    (8, 3, 32, 32)
-    #     cnt_encoding = cnt_encoding.sum(dim=0).view(-1)        # (512)
-    #     cnt_encodings.append(cnt_encoding.cpu().numpy())
-    #     cnt_recons.append(cnt_recon[0])
-    # cnt_encodings = np.array(cnt_encodings)                     # (#, 512)
-    # cnt_recons = torch.stack(cnt_recons)                        # (#, 3, 32, 32)
-    
-    # sample_index = np.random.randint(0, cnt_imgs.size(0), size=6)
-    # plt.figure(figsize=(10,4))
-    # # plot origin images
-    # imgs_np = cnt_imgs[sample_index, 0].numpy().transpose(0, 2, 3, 1)    # (b, 32, 32, 3)    (B, H, W, C)
-    # for i, img in enumerate(imgs_np):
-    #     plt.subplot(2, 6, i+1, xticks=[], yticks=[])
-    #     plt.imshow(img)
-
-    # cnt_recons = cnt_recons.clamp(0, 1).cpu().detach().numpy()  # (#, 32, 32, 3)
-    # cnt_recons = cnt_recons.transpose(0, 2, 3, 1)
-    # for i, img in enumerate(cnt_recons[sample_index]):
-    #     plt.subplot(2, 6, 6+i+1, xticks=[], yticks=[])
-    #     plt.imshow(img)
-    
-    # plt.tight_layout()
-    # plt.savefig('reconstruct.png')
-    # plt.clf()
-    # make_tsne(cnt_encodings)
-    # make_pca(cnt_encodings)
-    # make_3Dpca(cnt_encodings)
-    
-    # # ==============================================================================
     
     cnt_dic_list = [{
         'cnt': contours[i],

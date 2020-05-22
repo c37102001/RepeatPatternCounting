@@ -12,3 +12,4 @@ src/RCF/pretrained/vgg16convs.mat
 data
 *.png
 arch
+sheep_src

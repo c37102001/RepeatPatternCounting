@@ -6,6 +6,15 @@ import itertools
 from tqdm import tqdm
 import csv
 
+def do_CLAHE(img):
+    b,g,r = cv2.split(img)
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+    b = clahe.apply(b)
+    g = clahe.apply(g)
+    r = clahe.apply(r)
+    img = cv2.merge([b,g,r])
+    return img
+
 
 def add_border_edge(edge_img):
     edge_img[0] = 255       # first row
@@ -46,6 +55,8 @@ def is_overlap(cnt1, cnt2):
         return True
 
     small_cnt, large_cnt = sorted((cnt1, cnt2), key=cv2.contourArea)
+
+    # pointPolygonTest with measureDist=False will return +1/0/-1 if a point is inside/on/outside the contour
     points_side = [cv2.pointPolygonTest(large_cnt, tuple(point[0]), False) for point in small_cnt]
     if points_side.count(-1) < len(small_cnt) * 0.7:        # if outside points less than 0.7
         return True
@@ -75,7 +86,9 @@ def remove_group_overlap(cnt_dicts, labels, drawer, do_draw):
                 
                 # if different label and areas are similar, keep larger weight one.
                 # if areas are quite different, keep them both
-                elif 0.2 <= (cv2.contourArea(dict_i['cnt']) / cv2.contourArea(dict_j['cnt'])) <= 5:
+                
+                # elif 0.2 <= (cv2.contourArea(dict_i['cnt']) / cv2.contourArea(dict_j['cnt'])) <= 5:
+                else:
                     # grads_i = [d['color_gradient'] for d in cnt_dicts if d['label']==dict_i['label']]
                     # mean_grad_i = sum(grads_i) / len(grads_i)
                     # grads_j = [d['color_gradient'] for d in cnt_dicts if d['label']==dict_j['label']]

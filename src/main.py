@@ -17,7 +17,7 @@ from drawer import ContourDrawer
 from get_contours import get_contours
 from get_features import get_features
 from get_clusters import get_clusters
-from utils import remove_group_overlap, filter_small_group, evaluate_detection_performance
+from utils import remove_group_overlap, filter_small_group, evaluate_detection_performance, do_CLAHE
 from RCF.run_rcf import make_single_rcf
 from HED.run_hed import make_single_hed
 from SF.run_sf import make_single_sf
@@ -98,6 +98,7 @@ def main(img_file):         # img_file = 'IMG_ (33).jpg'
 
     img_name, img_ext = img_file.rsplit('.', 1)     # ['IMG_ (33)',  'jpg']
     input_img = cv2.imread(img_path + img_file)
+    # input_img = do_CLAHE(input_img)
     
     img_height = input_img.shape[0]               # shape: (1365, 2048, 3)
     resize_factor = resize_height / img_height  # resize_height=736, shape: (1365, 2048, 3) -> (736,1104,3)
@@ -112,10 +113,9 @@ def main(img_file):         # img_file = 'IMG_ (33).jpg'
 
     # i want to do_enhance
     contours = []
+    cnt_dicts = []
     for edge_type in use_edge:
         edge_type = edge_type.strip()
-        do_enhance, close_ks = img_cfg[edge_type].split(',')
-        do_enhance, close_ks = eval(do_enhance), eval(close_ks)
         
         # get edge image
         if edge_type == 'Canny':
@@ -145,18 +145,18 @@ def main(img_file):         # img_file = 'IMG_ (33).jpg'
             edge_img = cv2.imread(edge_img_path, cv2.IMREAD_GRAYSCALE)
             edge_img = cv2.resize(edge_img, (0, 0), fx=resize_factor, fy=resize_factor)     # shape: (736, *)
         
-        # find and filter contours
-        contours.extend(get_contours(filter_cfg, drawer, edge_img, edge_type, close_ks, do_enhance, do_draw))
-    
+        # Find and filter contours
+        contours.extend(get_contours(filter_cfg, drawer, edge_img, edge_type, do_draw))
+
     if do_draw or True:
         drawer.save(drawer.draw(contours), '2_CombineCnts')
-    
+    # return
     # =================== 2. Get contour features, cluster and remove overlap =========================
     
 
     # Get contour features
     contours, cnt_dicts = get_features(resi_input_img.copy(), contours, drawer, do_draw, filter_by_gradient)
-
+    
     # cluster contours into groups
     cnt_dicts, labels = get_clusters(cluster_cfg, contours, cnt_dicts, drawer, do_draw)
     

@@ -10,7 +10,7 @@ def sobel_edge_detect(img):
     return edge_img
 
 def canny_edge_detect(img,
-                      gaussian_para=3,
+                      gaussian_para=7,
                       gaussian_filter=True,
                       do_sharpen=True,
                       split_n_row=1,
@@ -22,9 +22,9 @@ def canny_edge_detect(img,
         print('[Canny] Gaussian filter')
         img = cv2.GaussianBlur(img, (gaussian_para, gaussian_para), 0)
 
-    if do_sharpen:
-        print('[Canny] Sharpening')
-        img = sharpen(img)
+    # if do_sharpen:
+    #     print('[Canny] Sharpening')
+    #     img = sharpen(img)
 
     re_height, re_width = img.shape[:2]
 

@@ -20,12 +20,12 @@ LIGHT_BLUE = (255, 255, 0)
 PURPLE = (205, 0, 205)
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
-'''
+
 switchColor = [(255, 255, 0), (255, 0, 255), (0, 255, 255), (255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 128, 0),
                (255, 0, 128), (128, 0, 255), (128, 255, 0), (0, 128, 255), (0, 255, 128), (128, 128, 0), (128, 0, 128),
                (0, 128, 128), (255, 64, 0), (255, 0, 64), (64, 255, 0), (64, 0, 255), (0, 255, 64), (0, 64, 255)]
-'''
-switchColor = [(0, 255, 255)]
+
+# switchColor = [(0, 255, 255)]
 # 736 will make the colony perfomance the best. (ref to yun-tao colony)
 resize_height = 736.0
 # sliding window's split number 
@@ -52,9 +52,9 @@ _gray_value_redistribution_local = True
 # Decide if excecute 1st evalution 
 _evaluate = False
 
-input_path = '../input/image/'
+input_path = '../data/general/image/'
 # structure forest output
-edge_input_path = '../input/edge_image/'
+edge_input_path = '../data/general/edge/SF/'
 output_path = '../output/legacy/'
 
 csv_output = '../output_csv_6_8[combine_result_before_filter_obvious]/'
@@ -68,14 +68,14 @@ _showImg = {'original_image': False, 'original_edge': False, 'enhanced_edge': Fa
             'obvious_histogram': False, 'each_group_result': False, 'result_obvious': False,
             'final_each_group_result': False, 'final_result': False}
 _writeImg = {'original_image': False, 'original_edge': False, 'enhanced_edge': False, 'original_contour': False,
-            'contour_filtered': False, 'size': False, 'shape': False, 'color': False, 'cluster_histogram': False,
-            'original_result': False, 'each_obvious_result': False, 'combine_obvious_result': False,
+            'contour_filtered': True, 'size': False, 'shape': False, 'color': False, 'cluster_histogram': True,
+            'original_result': True, 'each_obvious_result': False, 'combine_obvious_result': False,
             'obvious_histogram': False, 'each_group_result': False, 'result_obvious': False,
             'final_each_group_result': False, 'final_result': True}
 
 _show_resize = [(720, 'height'), (1200, 'width')][0]
 
-test_one_img = {'test': True, 'filename': 'IMG_ (24).jpg'}
+test_one_img = {'test': True, 'filename': 'IMG_ (62).jpg'}
 
 
 def main():
@@ -113,8 +113,8 @@ def main():
         _use_structure_edge = True
         # ============================
 
-        if not os.path.isfile(edge_input_path + fileName[:-4] + '_edge.jpg') and _use_structure_edge:
-            print(edge_input_path + fileName[:-4] + '_edge.jpg')
+        if not os.path.isfile(edge_input_path + fileName[:-4] + '_sf.png') and _use_structure_edge:
+            print(edge_input_path + fileName[:-4] + '_sf.png')
             print('EDGE FILE does not exist!')
             break
 
@@ -141,7 +141,7 @@ def main():
             if _use_structure_edge:
 
                 # read edge image from matlab 
-                edge_image_ori = cv2.imread(edge_input_path + fileName[:-4] + '_edge.jpg', cv2.IMREAD_GRAYSCALE)
+                edge_image_ori = cv2.imread(edge_input_path + fileName[:-4] + '_sf.png', cv2.IMREAD_GRAYSCALE)
                 height, width = edge_image_ori.shape[:2]
                 edged = cv2.resize(edge_image_ori, (0, 0), fx=resize_height / height, fy=resize_height / height)
 
@@ -1253,7 +1253,7 @@ def Hierarchical_clustering(feature_list, fileName, para, edge_type, cut_method=
     # plt.bar(left=range(len(rario)),height=rario)
     plt.bar(x=range(len(acceleration)), height=acceleration)
     plt.title(para + ' cut_point : ' + str(cut_point_list[0][0] + 1) + '  | value: ' + str(
-        acceleration[cut_point_list[0][0]]) + ' | ratio: ' + str(max_ratio))
+        round(acceleration[cut_point_list[0][0]], 2)) + ' | ratio: ' + str(round(max_ratio, 2)))
 
     if _showImg['cluster_histogram']:
         plt.show()

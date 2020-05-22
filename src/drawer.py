@@ -16,6 +16,7 @@ class ContourDrawer:
                (255, 0, 128), (128, 0, 255), (128, 255, 0), (0, 128, 255), (0, 255, 128), (128, 128, 0), (128, 0, 128),
                (0, 128, 128), (255, 64, 0), (255, 0, 64), (64, 255, 0), (64, 0, 255), (0, 255, 64), (0, 64, 255)]
         )
+        # self.switchColor = cycle([(255, 255, 0), (0, 255, 128)])
         self.do_mark = do_mark
 
     def blank_img(self):
@@ -49,6 +50,6 @@ class ContourDrawer:
         return img
     
     def save(self, img, desc):
-        img = cv2.putText(img, desc, (20, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+        # img = cv2.putText(img, desc, (20, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
         img_path = os.path.join(self.output_path, f'{self.img_name}_{desc}.jpg')
         cv2.imwrite(img_path, img)
