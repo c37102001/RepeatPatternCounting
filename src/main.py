@@ -52,9 +52,13 @@ elif eval(path_cfg['clear_results']):
 eval_cfg = cfg['evaluate']
 do_eval = eval(eval_cfg['do_eval'])
 eval_csv_path = eval_cfg['eval_csv_path']
-output_csv_path = os.path.join(eval_csv_path, 'eval.csv')
-if not os.path.exists(output_csv_path):
-    with open(output_csv_path, 'w+') as f:
+output1_csv_path = os.path.join(eval_csv_path, 'eval_1.csv')
+if not os.path.exists(output1_csv_path):
+    with open(output1_csv_path, 'w+') as f:
+        f.write('Image name,TP,FP,FN,Precision,Recall,F_measure,Error_rate\n')
+output2_csv_path = os.path.join(eval_csv_path, 'eval_2.csv')
+if not os.path.exists(output2_csv_path):
+    with open(output2_csv_path, 'w+') as f:
         f.write('Image name,TP,FP,FN,Precision,Recall,F_measure,Error_rate\n')
 
 
@@ -86,7 +90,6 @@ cluster2_cfg = cfg['cluster2_cfg']
 # obviousity thresold config
 obvs_cfg = cfg['obviousity_cfg']
 area_thres = eval(obvs_cfg['area_thres'])
-solidity_thres = eval(obvs_cfg['solidity_thres'])
 gradient_thres = eval(obvs_cfg['gradient_thres'])
 
 
@@ -148,7 +151,7 @@ def main(img_file):         # img_file = 'IMG_ (33).jpg'
         # Find and filter contours
         contours.extend(get_contours(filter_cfg, drawer, edge_img, edge_type, do_draw))
 
-    if do_draw or True:
+    if do_draw:
         drawer.save(drawer.draw(contours), '2_CombineCnts')
     # return
     # =================== 2. Get contour features, cluster and remove overlap =========================
@@ -176,13 +179,14 @@ def main(img_file):         # img_file = 'IMG_ (33).jpg'
 
 
     group_dicts = []
-    cnt_grads = []  # for drawing color gradients
+    # cnt_grads = []  # for drawing color gradients
     for label in set(labels):
         group_cnt_dicts = [cnt_dict for cnt_dict in cnt_dicts if cnt_dict['label'] == label]
         if len(group_cnt_dicts) < 2:
             continue
 
         group_cnts = []
+        cnt_grads = []
         avg_color_gradient = 0.0
         avg_solidity_factor = 0.0
         total_area = 0.0
@@ -212,41 +216,25 @@ def main(img_file):         # img_file = 'IMG_ (33).jpg'
             'area': total_area,
             'color_gradient': avg_color_gradient,
             'solidity': avg_solidity_factor,
+            'cnt_grads': cnt_grads,
             'votes': 0,
         })
 
 
     # ================================= 4. Obviousity voting =====================================
+    
 
-
-    factors = ['area', 'solidity', 'color_gradient']
-    # factors = ['solidity', 'color_gradient']
-    thres_params = [area_thres, solidity_thres, gradient_thres]
-    # thres_params = [solidity_thres, gradient_thres]
+    factors = ['area', 'color_gradient']
+    thres_params = [area_thres, gradient_thres]
     for factor, thres_param in zip(factors, thres_params):
-            
+        
         # sorting by factor from small to large
         group_dicts.sort(key=lambda group_dict: group_dict[factor], reverse=False)
         factor_list = [group[factor] for group in group_dicts]
-        
-        if len(factor_list) == 1:
-            obvious_index = 0
-        elif factor == 'area':
-            obvious_index = len(factor_list) - 1
-        else:
-            diff = np.diff(factor_list)
-            obvious_index = np.where(diff == max(diff))[0][0] + 1
-            
-        obvious_value = factor_list[obvious_index]
+   
+        obvious_index = len(factor_list) - 1
+        thres = factor_list[obvious_index] * thres_param
 
-        thres = obvious_value * thres_param
-
-        if factor == 'color_gradient':
-            if obvious_value < 40:
-                thres = 0
-            else:
-                thres = max(thres, 90) if factor_list[-1] > 100 else min(thres, 90)
-        
         # thres = min(thres, 90) if factor == 'color_gradient' else thres # TODO
         for i, factor_value in enumerate(factor_list[:obvious_index]):
             if factor_value > thres:
@@ -254,74 +242,75 @@ def main(img_file):         # img_file = 'IMG_ (33).jpg'
                 break
 
         for group in group_dicts[obvious_index:]:
-            # TODO
-            if factor == 'solidity':
-                group['votes'] += 10
-            else:
-                group['votes'] += 1
+            group['votes'] += 1
 
         if do_draw or True:
             img = drawer.blank_img()
             for group in group_dicts[obvious_index:]:
                 img = drawer.draw_same_color(group['group_cnts'], img, color=(0, 255, 0))  # green for obvious
+            
             for group in group_dicts[:obvious_index]:
                 img = drawer.draw_same_color(group['group_cnts'], img, color=(0, 0, 255))  # red for others
 
             if factor == 'color_gradient':
-                for grad, center in cnt_grads:
-                    img = cv2.putText(img, f'{int(grad)}', center, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
+                for group_dict in group_dicts:
+                    for grad, center in group_dict['cnt_grads']:
+                        img = cv2.putText(img, f'{int(grad)}', center, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
             drawer.save(img, desc=f'4_Obvious_{factor}')
         
             plt.bar(x=range(len(factor_list)), height=factor_list)
             plt.title(f'{factor} cut idx: {obvious_index} | threshold: {thres: .3f}')
             plt.savefig(os.path.join(output_path, f'{img_name}_4_Obvious_{factor}.png'))
             plt.close()
-    
+
     
     # ============================ 5. Choose groups with most votes ==================================
 
 
-    obvious_groups = []
     most_votes_group = max(group_dicts, key=lambda x: x['votes'])
     most_votes = most_votes_group['votes']
-
-    # TODO
-    most_votes = 11
-    
-    for group in group_dicts:
-        if group['votes'] >= most_votes:
-            obvious_groups.append(group)
-    
-    # contours with same label
-    group_cnts = [group['group_cnts'] for group in obvious_groups]
-    print(f'Total Groups: {len(obvious_groups)} (cnt num: {[len(g["group_cnts"]) for g in obvious_groups]})')
+    obvious_groups = [g for g in group_dicts if g['votes'] == most_votes]
+    obvious_group_cnts = [group['group_cnts'] for group in obvious_groups]     # contours with same label
+    print(f'Priority1 Groups: {len(obvious_groups)} (cnt num: {[len(g["group_cnts"]) for g in obvious_groups]})')
     
     # draw final result
     img = resi_input_img / 3.0    # darken the image to make the contour visible
-    for cnts in group_cnts:
+    for cnts in obvious_group_cnts:
         img = drawer.draw_same_color(cnts, img)
     img = cv2.resize(img, (0, 0), fx=1/resize_factor, fy=1/resize_factor)
     img = np.concatenate((input_img, img), axis=1)
-    drawer.save(img, '5_FinalResult')
-
-    # draw all contours result
-    img = resi_input_img / 3.0    # darken the image to make the contour visible
-    for group in group_dicts:
-        img = drawer.draw_same_color(group['group_cnts'], img)
-    img = cv2.resize(img, (0, 0), fx=1/resize_factor, fy=1/resize_factor)
-    img = np.concatenate((input_img, img), axis=1)
-    drawer.save(img, '5_FinalResult_AllCnts')
-    
-
-    print('-----------------------------------------------------------')
+    drawer.save(img, '5_FinalResult1')
 
     if do_eval:
         tp, fp, fn, pr, re, fm, er = evaluate_detection_performance(
-            resi_input_img.copy(), img_file, group_cnts, resize_factor, eval_csv_path)
-        
-        with open(output_csv_path, 'a+') as f:
+        resi_input_img.copy(), img_file, obvious_group_cnts, resize_factor, eval_csv_path)
+    
+        with open(output1_csv_path, 'a+') as f:
             writer = csv.writer(f)
             writer.writerow([img_file, tp, fp, fn, pr, re, fm, er])
+
+
+    # draw all contours result
+    second_obvious_groups = [g for g in group_dicts if g['votes'] >= 1]
+    sencond_group_cnts = [group['group_cnts'] for group in second_obvious_groups]
+    print(f'Priority2 Groups: {len(second_obvious_groups)} (cnt num: {[len(g["group_cnts"]) for g in second_obvious_groups]})')
+    
+    img = resi_input_img / 3.0    # darken the image to make the contour visible
+    for cnts in sencond_group_cnts:
+        img = drawer.draw_same_color(cnts, img)
+    img = cv2.resize(img, (0, 0), fx=1/resize_factor, fy=1/resize_factor)
+    img = np.concatenate((input_img, img), axis=1)
+    drawer.save(img, '5_FinalResult2')
+
+    if do_eval:
+        tp, fp, fn, pr, re, fm, er = evaluate_detection_performance(
+            resi_input_img.copy(), img_file, sencond_group_cnts, resize_factor, eval_csv_path)
+        
+        with open(output2_csv_path, 'a+') as f:
+            writer = csv.writer(f)
+            writer.writerow([img_file, tp, fp, fn, pr, re, fm, er])
+
+    print('-----------------------------------------------------------')
 
 
 total_start = time.time()

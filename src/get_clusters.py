@@ -47,7 +47,7 @@ def get_clusters(cluster_cfg, contours, cnt_dicts, drawer, do_draw=False, second
         cnts = [contours[i] for i in group_idx]
         img = drawer.draw_same_color(cnts, img)
         
-    if do_draw or True:
+    if do_draw:
         desc = f'2-2_1stGrouped' if not second else f'2-5_2ndGrouped'
         drawer.save(img, desc)
 

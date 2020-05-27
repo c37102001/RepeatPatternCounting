@@ -87,8 +87,8 @@ def remove_group_overlap(cnt_dicts, labels, drawer, do_draw):
                 # if different label and areas are similar, keep larger weight one.
                 # if areas are quite different, keep them both
                 
-                # elif 0.2 <= (cv2.contourArea(dict_i['cnt']) / cv2.contourArea(dict_j['cnt'])) <= 5:
-                else:
+                elif 0.2 <= (cv2.contourArea(dict_i['cnt']) / cv2.contourArea(dict_j['cnt'])) <= 5:
+                # else:
                     # grads_i = [d['color_gradient'] for d in cnt_dicts if d['label']==dict_i['label']]
                     # mean_grad_i = sum(grads_i) / len(grads_i)
                     # grads_j = [d['color_gradient'] for d in cnt_dicts if d['label']==dict_j['label']]
@@ -105,7 +105,7 @@ def remove_group_overlap(cnt_dicts, labels, drawer, do_draw):
     cnt_dicts = [cnt_dict for cnt_dict in cnt_dicts if cnt_dict['group_weight'] > 0]
     labels = [cnt_dict['label'] for cnt_dict in cnt_dicts]
     print('[Remove overlap results] (label, counts): ', [(label, labels.count(label)) for label in set(labels)])
-    if do_draw or True:
+    if do_draw:
         img = drawer.blank_img()
         for label in set(labels):
             cnts = [cnt_dict['cnt'] for cnt_dict in cnt_dicts if cnt_dict['label']==label]
@@ -139,7 +139,8 @@ def scale_contour(cnt, type, im_area):
 def filter_small_group(cnt_dicts, labels, drawer, do_draw, ratio=0.1):
     group_dicts = [[d for d in cnt_dicts if d['label']==label] for label in set(labels)]
     max_group_count = max([len(g) for g in group_dicts])
-    filtered_group_dicts = [g for g in group_dicts if len(g) >= max_group_count * ratio]
+    cnt_num_threshold = max(max_group_count * ratio, 2)     # at least more than 2 contours
+    filtered_group_dicts = [g for g in group_dicts if len(g) >= cnt_num_threshold]
     
     cnt_dicts = [d for g in filtered_group_dicts for d in g]
     labels = [cnt_dict['label'] for cnt_dict in cnt_dicts]
@@ -167,6 +168,7 @@ def evaluate_detection_performance(img, img_file, final_group_cnt, resize_factor
     ori_img_height, ori_img_width = img.shape[0]/resize_factor, img.shape[1]/resize_factor
     # resize_factor = 736 / 720
     resize_factor = (ori_img_width / 1200) * (736 / ori_img_height)
+    
     tp = 0
     fp = 0
     fn = 0
@@ -220,7 +222,8 @@ def evaluate_detection_performance(img, img_file, final_group_cnt, resize_factor
         fm = 2 * pr * re / (pr + re)
     if groundtruth_count > 0:
         er = abs(program_count - groundtruth_count) / float(groundtruth_count)
-    print(tp, groundtruth)
+    # print(tp, groundtruth)
+    print(f"Precision: {pr:.2f}, Recall: {re:.2f}")
     return tp, fp, fn, pr, re, fm, er
     # _____________________1 st evaluation end__________________________________________________
 

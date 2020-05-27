@@ -56,7 +56,7 @@ def get_contours(filter_cfg, drawer, edge_img, edge_type, do_draw=False):
     # find closed contours, return (list of ndarray), len = Num_of_cnts, ele = (Num_of_pixels, 1, 2(x,y))
     contours, hierarchy = cv2.findContours(edge_img, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)
     print(f'[{edge_type}] # of original contours: {len(contours)}')
-    if do_draw or True:
+    if do_draw:
         img = drawer.draw(contours)
         desc = f'1_{edge_type}-2_OriginContour'
         drawer.save(img, desc)
@@ -131,5 +131,6 @@ def filter_contours(filter_cfg, contours, re_height, re_width, drawer):
     median_area = np.median([cv2.contourArea(c) for c in accept_contours])
     accept_contours = filter(lambda c: cv2.contourArea(c) > median_area * 0.6, accept_contours)
     accept_contours = [*accept_contours]
+    
     return accept_contours
 

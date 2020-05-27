@@ -77,10 +77,11 @@ def get_features(color_img, contours, drawer, do_draw, filter_by_gradient):
         cnt_pixel_distances.append(pixel_distances)
 
     contours = accept_cnts
-    if do_draw or filter_by_gradient:
-        drawer.save(drawer.draw(contours), '2-0_FilterByGrad')
+    if do_draw and filter_by_gradient:
+        drawer.save(drawer.draw(contours), '2-0-1_FilterByGrad')
     
     cnt_size = list(map(cv2.contourArea, contours))
+    # cnt_size, contours = remove_size_outlier(cnt_size, contours, drawer)
     max_size = max(cnt_size)
     cnt_norm_size = [[size / max_size] for size in cnt_size]
 
@@ -94,12 +95,32 @@ def get_features(color_img, contours, drawer, do_draw, filter_by_gradient):
         'color': cnt_avg_lab[i],
         'size': cnt_norm_size[i],
         'color_gradient': cnt_color_gradient[i],
-        # 'texture': cnt_textures[i],
-        # 'nn': nn_features[i],
-        # 'encoding': cnt_encodings[i],   # (512,)
     } for i in range(len(contours))]
 
     return contours, cnt_dic_list
+
+
+def remove_size_outlier(cnt_size, contours, drawer):
+    Q3 = np.quantile(cnt_size, .75)
+    Q1 = np.quantile(cnt_size, .25)
+    IQR = Q3 - Q1
+    
+    accepted_contours = []
+    outlier_contours = []
+    accepted_sizes = []
+    for size, contour in zip(cnt_size, contours):
+        if (Q1 - 1.5*IQR) <= size <= (Q3 + 1.5*IQR):
+            accepted_sizes.append(size)
+            accepted_contours.append(contour)
+        else:
+            outlier_contours.append(contour)
+    
+    img = drawer.blank_img()
+    img = drawer.draw_same_color(accepted_contours, img, color=(0, 255, 0))  # green for obvious
+    img = drawer.draw_same_color(outlier_contours, img, color=(0, 0, 255))  # red for others
+    drawer.save(img, '2-0-2_RemoveOutliers')
+
+    return accepted_sizes, accepted_contours
 
 
 def get_cnt_color_gradient(contour, im):
