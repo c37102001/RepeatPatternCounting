@@ -91,6 +91,7 @@ cluster2_cfg = cfg['cluster2_cfg']
 obvs_cfg = cfg['obviousity_cfg']
 area_thres = eval(obvs_cfg['area_thres'])
 gradient_thres = eval(obvs_cfg['gradient_thres'])
+solidity_thres = eval(obvs_cfg['solidity_thres'])
 
 
 
@@ -116,7 +117,6 @@ def main(img_file):         # img_file = 'IMG_ (33).jpg'
 
     # i want to do_enhance
     contours = []
-    cnt_dicts = []
     for edge_type in use_edge:
         edge_type = edge_type.strip()
         
@@ -147,7 +147,15 @@ def main(img_file):         # img_file = 'IMG_ (33).jpg'
 
             edge_img = cv2.imread(edge_img_path, cv2.IMREAD_GRAYSCALE)
             edge_img = cv2.resize(edge_img, (0, 0), fx=resize_factor, fy=resize_factor)     # shape: (736, *)
-        
+
+            # sobel = sobel_edge_detect(resi_input_img.copy())
+            # edge_img = (0.5 * sobel + 0.5 * edge_img).astype(np.uint8)
+
+            # canny = edge_img = canny_edge_detect(resi_input_img.copy())
+            # sobel = sobel_edge_detect(resi_input_img.copy())
+            # edge_img = (0.2 * canny + 0.4 * sobel + 0.4 * edge_img).astype(np.uint8)
+            
+
         # Find and filter contours
         contours.extend(get_contours(filter_cfg, drawer, edge_img, edge_type, do_draw))
 
@@ -174,19 +182,18 @@ def main(img_file):         # img_file = 'IMG_ (33).jpg'
     # filter group with too less contours
     cnt_dicts, labels = filter_small_group(cnt_dicts, labels, drawer, do_draw)
 
-
+    
     # =============================== 3. Count group obviousity factors ===================================
 
 
     group_dicts = []
-    # cnt_grads = []  # for drawing color gradients
+    cnt_grads = []  # for drawing color gradients
     for label in set(labels):
         group_cnt_dicts = [cnt_dict for cnt_dict in cnt_dicts if cnt_dict['label'] == label]
         if len(group_cnt_dicts) < 2:
             continue
 
         group_cnts = []
-        cnt_grads = []
         avg_color_gradient = 0.0
         avg_solidity_factor = 0.0
         total_area = 0.0
@@ -216,25 +223,43 @@ def main(img_file):         # img_file = 'IMG_ (33).jpg'
             'area': total_area,
             'color_gradient': avg_color_gradient,
             'solidity': avg_solidity_factor,
-            'cnt_grads': cnt_grads,
             'votes': 0,
         })
 
 
     # ================================= 4. Obviousity voting =====================================
-    
 
-    factors = ['area', 'color_gradient']
-    thres_params = [area_thres, gradient_thres]
+
+    factors = ['area', 'solidity', 'color_gradient']
+    # factors = ['solidity', 'color_gradient']
+    thres_params = [area_thres, solidity_thres, gradient_thres]
+    # thres_params = [solidity_thres, gradient_thres]
     for factor, thres_param in zip(factors, thres_params):
-        
+            
         # sorting by factor from small to large
         group_dicts.sort(key=lambda group_dict: group_dict[factor], reverse=False)
         factor_list = [group[factor] for group in group_dicts]
-   
-        obvious_index = len(factor_list) - 1
-        thres = factor_list[obvious_index] * thres_param
+        
+        if len(factor_list) == 1:
+            obvious_index = 0
+        elif factor == 'area':
+            obvious_index = len(factor_list) - 1
+        else:
+            diff = np.diff(factor_list)
+            obvious_index = np.where(diff == max(diff))[0][0] + 1
+            
+        obvious_value = factor_list[obvious_index]
 
+        thres = obvious_value * thres_param
+
+        if factor == 'color_gradient':
+            if obvious_value < 40:
+                thres = 0
+            elif thres > 100:
+                thres = 100
+            # else:
+                # thres = max(thres, 90) if factor_list[-1] > 100 else min(thres, 90)
+        
         # thres = min(thres, 90) if factor == 'color_gradient' else thres # TODO
         for i, factor_value in enumerate(factor_list[:obvious_index]):
             if factor_value > thres:
@@ -242,20 +267,22 @@ def main(img_file):         # img_file = 'IMG_ (33).jpg'
                 break
 
         for group in group_dicts[obvious_index:]:
-            group['votes'] += 1
+            # TODO
+            if factor == 'solidity':
+                group['votes'] += 10
+            else:
+                group['votes'] += 1
 
         if do_draw or True:
             img = drawer.blank_img()
             for group in group_dicts[obvious_index:]:
                 img = drawer.draw_same_color(group['group_cnts'], img, color=(0, 255, 0))  # green for obvious
-            
             for group in group_dicts[:obvious_index]:
                 img = drawer.draw_same_color(group['group_cnts'], img, color=(0, 0, 255))  # red for others
 
             if factor == 'color_gradient':
-                for group_dict in group_dicts:
-                    for grad, center in group_dict['cnt_grads']:
-                        img = cv2.putText(img, f'{int(grad)}', center, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
+                for grad, center in cnt_grads:
+                    img = cv2.putText(img, f'{int(grad)}', center, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
             drawer.save(img, desc=f'4_Obvious_{factor}')
         
             plt.bar(x=range(len(factor_list)), height=factor_list)
@@ -291,7 +318,7 @@ def main(img_file):         # img_file = 'IMG_ (33).jpg'
 
 
     # draw all contours result
-    second_obvious_groups = [g for g in group_dicts if g['votes'] >= 1]
+    second_obvious_groups = [g for g in group_dicts if g['votes'] > 10]
     sencond_group_cnts = [group['group_cnts'] for group in second_obvious_groups]
     print(f'Priority2 Groups: {len(second_obvious_groups)} (cnt num: {[len(g["group_cnts"]) for g in second_obvious_groups]})')
     

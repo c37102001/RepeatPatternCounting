@@ -166,8 +166,11 @@ def evaluate_detection_performance(img, img_file, final_group_cnt, resize_factor
     evaluate_csv_path : read the groundtruth data
     '''
     ori_img_height, ori_img_width = img.shape[0]/resize_factor, img.shape[1]/resize_factor
-    # resize_factor = 736 / 720
-    resize_factor = (ori_img_width / 1200) * (736 / ori_img_height)
+
+    if 720 / ori_img_height < 1200 / ori_img_width:
+        resize_factor = 736 / 720
+    else:
+        resize_factor = (ori_img_width / 1200) * (736 / ori_img_height)
     
     tp = 0
     fp = 0

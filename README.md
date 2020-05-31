@@ -126,6 +126,9 @@ For new version
   * Evaluation
   * Remove "Outer contour filter" Algorithm
 
+* 0531
+  * approx = cv2.approxPolyDP(contour, 0.03 * perimeter, True)
+
 
 ## Sample directory structure 
 Asterisk(*) means auto-generated directory

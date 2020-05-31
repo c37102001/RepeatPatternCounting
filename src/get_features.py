@@ -141,6 +141,7 @@ def get_cnt_color_gradient(contour, im):
             color_gradients.append(gradient)
     
     color_gradients = sorted([g for g in color_gradients if g>0])
+    # color_gradients = color_gradients[len(color_gradients)//2: ]
     # avg_gradient = np.median(color_gradients) if len(color_gradients) else 0
     avg_gradient = sum(color_gradients) / len(color_gradients) if len(color_gradients) else 0
     
