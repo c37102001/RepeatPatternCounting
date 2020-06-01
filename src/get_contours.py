@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 from utils import add_border_edge
 from ipdb import set_trace as pdb
+from edge_detection import canny_edge_detect, sobel_edge_detect
 
 
 def get_contours(filter_cfg, drawer, edge_img, edge_type, do_draw=False):
@@ -31,26 +32,41 @@ def get_contours(filter_cfg, drawer, edge_img, edge_type, do_draw=False):
 
     # do CLAHE
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(9, 9))
+    edge_img = cv2.bilateralFilter(edge_img, 5, 150, 150)
     edge_img = clahe.apply(edge_img)
     if do_draw:
         desc = f'1_{edge_type}-1_EnhancedEdge'
         drawer.save(edge_img, desc)
+    
+    
+    # median filter
+    if not edge_type == 'Canny':
+        # from scipy.signal import medfilt
+        # edge_img = medfilt(edge_img, 3).astype(np.uint8)
+        # edge_img = cv2.bilateralFilter(edge_img, 5, 30, 30)
+        edge_img = cv2.GaussianBlur(edge_img, (3, 3), 0)
+        if do_draw:
+            desc = f'1_{edge_type}-1-1_MF'
+            drawer.save(edge_img, desc)
 
     # threshold to 0 or 255
     edge_img = cv2.threshold(edge_img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
+    
+    
     if do_draw:
         desc = f'1_{edge_type}-1-1_Threshold'
         drawer.save(edge_img, desc)
 
+
     # morphology close
+    # if not edge_type == 'SF':
     kernel_size = min(edge_img.shape) // 100
-    # kernel_size = 3
+    # kernel_size = sum(edge_img.shape) // 200
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel_size, kernel_size))
     edge_img = cv2.morphologyEx(edge_img, cv2.MORPH_CLOSE, kernel)
     if do_draw:
         desc = f'1_{edge_type}-1-2_closeEdge'
         drawer.save(edge_img, desc)
-
     
 
     # add edge on border

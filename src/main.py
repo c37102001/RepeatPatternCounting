@@ -102,9 +102,9 @@ def main(img_file):         # img_file = 'IMG_ (33).jpg'
 
     img_name, img_ext = img_file.rsplit('.', 1)     # ['IMG_ (33)',  'jpg']
     input_img = cv2.imread(img_path + img_file)
-    # input_img = do_CLAHE(input_img)
     
     img_height = input_img.shape[0]               # shape: (1365, 2048, 3)
+    img_width = input_img.shape[1]
     resize_factor = resize_height / img_height  # resize_height=736, shape: (1365, 2048, 3) -> (736,1104,3)
     resi_input_img = cv2.resize(input_img, (0, 0), fx=resize_factor, fy=resize_factor)
     
@@ -122,10 +122,10 @@ def main(img_file):         # img_file = 'IMG_ (33).jpg'
         
         # get edge image
         if edge_type == 'Canny':
-            edge_img = canny_edge_detect(resi_input_img.copy())
+            edge_img = canny_edge_detect(input_img.copy())
 
         elif edge_type == 'Sobel':
-            edge_img = sobel_edge_detect(resi_input_img.copy())
+            edge_img = sobel_edge_detect(input_img.copy())
 
         else:
             edge_folder_path = os.path.join(edge_path, edge_type)
@@ -146,19 +146,16 @@ def main(img_file):         # img_file = 'IMG_ (33).jpg'
                     make_single_sf(input_img, edge_img_path)
 
             edge_img = cv2.imread(edge_img_path, cv2.IMREAD_GRAYSCALE)
-            edge_img = cv2.resize(edge_img, (0, 0), fx=resize_factor, fy=resize_factor)     # shape: (736, *)
-
-            # sobel = sobel_edge_detect(resi_input_img.copy())
-            # edge_img = (0.5 * sobel + 0.5 * edge_img).astype(np.uint8)
-
-            # canny = edge_img = canny_edge_detect(resi_input_img.copy())
-            # sobel = sobel_edge_detect(resi_input_img.copy())
-            # edge_img = (0.2 * canny + 0.4 * sobel + 0.4 * edge_img).astype(np.uint8)
+            edge_img = cv2.resize(edge_img, (img_width, img_height))
             
-
+            sobel = sobel_edge_detect(input_img.copy())
+            edge_img = (0.7 * sobel + 0.3 * edge_img).astype(np.uint8)
+            
+        edge_img = cv2.resize(edge_img, (0, 0), fx=resize_factor, fy=resize_factor)     # shape: (736, *)
+            
         # Find and filter contours
         contours.extend(get_contours(filter_cfg, drawer, edge_img, edge_type, do_draw))
-
+    
     if do_draw:
         drawer.save(drawer.draw(contours), '2_CombineCnts')
     # return

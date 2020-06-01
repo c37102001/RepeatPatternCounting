@@ -1,10 +1,12 @@
 import cv2
 import numpy as np
 from skimage.filters import roberts, sobel
+from ipdb import set_trace as pdb
 
 
 def sobel_edge_detect(img):
     img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    # img = cv2.bilateralFilter(img, 9, 75, 75)
     edge_img = sobel(img)
     edge_img = np.uint8(edge_img * 255)
     return edge_img
@@ -19,19 +21,13 @@ def canny_edge_detect(img,
 
     # filter the noise
     if gaussian_filter:
-        print('[Canny] Gaussian filter')
         img = cv2.GaussianBlur(img, (gaussian_para, gaussian_para), 0)
-
-    # if do_sharpen:
-    #     print('[Canny] Sharpening')
-    #     img = sharpen(img)
 
     re_height, re_width = img.shape[:2]
 
     offset_r = re_height / split_n_row  # 736/1 = 736
     offset_c = re_width / split_n_column  # 1104
 
-    print('[Canny] Canny Detect edge')
     edged = np.zeros(img.shape[:2], np.uint8)
 
     for row_n in np.arange(0, split_n_row, 0.5):  # 0, 0.5

@@ -31,13 +31,14 @@ def get_features(color_img, contours, drawer, do_draw, filter_by_gradient):
     cnt_color_gradient = []
     sample_number = 180
     all_grads = [get_cnt_color_gradient(c, color_img) for c in contours]
-    accept_grads = [g for g in all_grads if g > 40]
-    mean_grad = sum(accept_grads) / len(accept_grads) if len(accept_grads) else 0
+    all_grad_mean = sum(all_grads) / len(all_grads) if len(all_grads) else 0
+    high_grad = [g for g in all_grads if g > 40]
+    high_grad_mean = sum(high_grad) / len(high_grad) if len(high_grad) else 0
 
     for contour, grad in tqdm(zip(contours, all_grads), desc='[Get features]', total=len(contours)):
         
         if filter_by_gradient:
-            if grad < 20 or (mean_grad > 60 and grad < 40):
+            if (all_grad_mean > 20 and grad < 20) or (high_grad_mean > 60 and grad < 40):
                 continue
         cnt_color_gradient.append(grad)
         accept_cnts.append(contour)
