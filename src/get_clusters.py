@@ -76,9 +76,7 @@ def hierarchical_clustering(cluster_cfg, feature_list, feature_type, drawer, do_
     
     # hierarchically link features by order of distance(measured by 'ward'), output a hierarchical tree
     # return ndarray sized [#feature_list-1, 4], 4 means (group idx1, gp idx2, gp_distance, included ele num)
-
-    method = 'single' if second else 'single'
-    feature_dist_hierarchy = linkage(feature_list, method)
+    feature_dist_hierarchy = linkage(feature_list, 'ward')
         
     # distance between every two groups, sized [#feature - 1]
     dist_list = feature_dist_hierarchy[:, 2]
@@ -86,39 +84,36 @@ def hierarchical_clustering(cluster_cfg, feature_list, feature_type, drawer, do_
     # difference of distance between previous one, sized [#feature - 2]
     diff_list = np.diff(dist_list)
 
-    # ===================  find cut point by max diff ratio ==========================
-    # count avg for those who is larger than all_avg_diff as threshold
-    all_avg_diff = sum(diff_list) / len(diff_list)
-    larger_than_avgs_diffs = [diff for diff in diff_list if diff > all_avg_diff]
-    diff_threshold = sum(larger_than_avgs_diffs) / float(len(larger_than_avgs_diffs))
-    
-    # count differ ratio between previous n_before differs, sized [#feature - 3]
-    ratio_list = []
-    for i, diff in enumerate(diff_list[1:], start=1):
-        if diff < diff_threshold:         # skip if less than average ratio
-            ratio_list.append(0)
-            continue
-        avg_index = [i for i in range(max(0, i-n_before), i)]
-        diff_avg = sum(diff_list[avg_index]) / len(avg_index)
-        ratio = diff / diff_avg if not diff_avg == 0 else 0
-        ratio_list.append(ratio)
-    
-    max_ratio = max(ratio_list)
-    max_ratio_idx = ratio_list.index(max_ratio)
+    if feature_type == 'nn':
+        # ===================  find cut point by max diff ratio ==========================
+        # count avg for those who is larger than all_avg_diff as threshold
+        all_avg_diff = sum(diff_list) / len(diff_list)
+        larger_than_avgs_diffs = [diff for diff in diff_list if diff > all_avg_diff]
+        diff_threshold = sum(larger_than_avgs_diffs) / float(len(larger_than_avgs_diffs))
+        
+        # count differ ratio between previous n_before differs, sized [#feature - 3]
+        ratio_list = []
+        for i, diff in enumerate(diff_list[1:], start=1):
+            if diff < diff_threshold:         # skip if less than average ratio
+                ratio_list.append(0)
+                continue
+            avg_index = [i for i in range(max(0, i-n_before), i)]
+            diff_avg = sum(diff_list[avg_index]) / len(avg_index)
+            ratio = diff / diff_avg if not diff_avg == 0 else 0
+            ratio_list.append(ratio)
+        
+        max_ratio = max(ratio_list)
+        max_ratio_idx = ratio_list.index(max_ratio)
+        if max_ratio < 2.0:
+            print(f'[{feature_type}] clustering all in one group! max_ratio:', max_ratio)
+            return [0] * len(feature_list)
 
-    # to find the 'target'(not always max) difference idx, plus one to max ratio idx
-    target_diff_idx = max_ratio_idx + 1
-    thres_dist_idx = target_diff_idx
-    thres_dist_include = dist_list[target_diff_idx]
-    thres_dist_exclude = dist_list[target_diff_idx + 1]
+        # to find the 'target'(not always max) difference idx, plus one to max ratio idx
+        target_diff_idx = max_ratio_idx + 1
 
-    clusters = fcluster(feature_dist_hierarchy, thres_dist_include, criterion='distance')
-    small_group_shape = np.mean(feature_list[clusters == 1])
-    thres_shape = np.sqrt(thres_dist_exclude ** 2 / 128)        # TODO 128
-    
-    while thres_shape < small_group_shape * thres:
-        thres_dist_idx += 1
-        if thres_dist_idx == len(dist_list) - 1:
+        while target_diff_idx < len(diff_list) and diff_list[target_diff_idx] < thres:
+            target_diff_idx += 1
+        if target_diff_idx == len(diff_list):
             print(f'[{feature_type}] clustering all in one group!')
             clusters = [0] * len(feature_list)
             thres_dist_idx == -1
@@ -134,6 +129,25 @@ def hierarchical_clustering(cluster_cfg, feature_list, feature_type, drawer, do_
 
     # =========================================================================================
 
+    else:
+        # ===================  find cut point by absolute threshold value==========================
+        try:
+            target_diff_idx, target_diff = next((i, diff) for i, diff in enumerate(diff_list) if diff >= thres)
+        except:
+            print(f'[{feature_type}] clustering all in one group!')
+            if do_draw:
+                plt.bar(x=range(len(diff_list)), height=diff_list)
+                plt.title(f'{feature_type} diff plot')
+                if not second:
+                    desc = f'{drawer.img_name}_2-1_{feature_type.capitalize()}Group.png'
+                else:
+                    desc = f'{drawer.img_name}_2-4_2nd{feature_type.capitalize()}Group.png'
+                save_path = os.path.join(drawer.output_path, desc)
+                plt.savefig(save_path)
+                plt.close()
+            return [0] * len(feature_list)
+        # =========================================================================================
+    
     # by distance[dist_idx] and distance[dist_idx+1], we get difference[dist_idx(=diff_idx)]
     # and we should take previous one(distance[dist_idx]) as threshold, so we choose thres_dist_idx = target_diff_idx.
 
@@ -149,5 +163,5 @@ def hierarchical_clustering(cluster_cfg, feature_list, feature_type, drawer, do_
         plt.savefig(save_path)
         plt.close()
 
-    
+    clusters = fcluster(feature_dist_hierarchy, thres_dist, criterion='distance')
     return clusters

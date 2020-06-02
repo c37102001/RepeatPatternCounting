@@ -151,8 +151,7 @@ def filter_small_group(cnt_dicts, labels, drawer, do_draw, ratio=0.1):
         for label in set(labels):
             cnts = [cnt_dict['cnt'] for cnt_dict in cnt_dicts if cnt_dict['label']==label]
             img = drawer.draw_same_color(cnts, img)
-        # drawer.save(img, '2-6_RemoveSmallGroup')
-        drawer.save(img, '2-2-1_RemoveSmallGroup')
+        drawer.save(img, '2-6_RemoveSmallGroup')
     return cnt_dicts, labels
 
 

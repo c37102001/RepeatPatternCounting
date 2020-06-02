@@ -167,8 +167,6 @@ def main(img_file):         # img_file = 'IMG_ (33).jpg'
     
     # cluster contours into groups
     cnt_dicts, labels = get_clusters(cluster_cfg, contours, cnt_dicts, drawer, do_draw)
-
-    cnt_dicts, labels = filter_small_group(cnt_dicts, labels, drawer, do_draw)
     
     # Remove overlap
     cnt_dicts, labels = remove_group_overlap(cnt_dicts, labels, drawer, do_draw)
