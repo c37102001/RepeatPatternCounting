@@ -123,7 +123,6 @@ def scale_contour(cnt, type, im_area):
         scale = 0.9 if type == 'inner' else 1.1
     else:
         scale = 0.85 if type == 'inner' else 1.17
-    scale = 1.2
     
     M = cv2.moments(cnt)
     cx = int(M['m10']/M['m00'])

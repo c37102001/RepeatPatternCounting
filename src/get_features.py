@@ -126,8 +126,8 @@ def remove_size_outlier(cnt_size, contours, drawer):
 
 def get_cnt_color_gradient(contour, im):
     im_area = im.shape[0] * im.shape[1]
-    # cnt_inner = scale_contour(contour, 'inner', im_area)
-    cnt_inner = contour
+    cnt_inner = scale_contour(contour, 'inner', im_area)
+    # cnt_inner = contour
     cnt_outer = scale_contour(contour, 'outer', im_area)
 
     color_gradients = []
