@@ -115,7 +115,6 @@ def hierarchical_clustering(cluster_cfg, feature_list, feature_type, drawer, do_
         if target_diff_idx == len(diff_list):
             print(f'[{feature_type}] clustering all in one group!')
         target_diff = diff_list[min(target_diff_idx, len(diff_list)-1)]
-        print()
         # =========================================================================================
 
     # by distance[dist_idx] and distance[dist_idx+1], we get difference[dist_idx(=diff_idx)]
