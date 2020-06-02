@@ -123,6 +123,7 @@ def scale_contour(cnt, type, im_area):
         scale = 0.9 if type == 'inner' else 1.1
     else:
         scale = 0.85 if type == 'inner' else 1.17
+    scale = 1.2
     
     M = cv2.moments(cnt)
     cx = int(M['m10']/M['m00'])
@@ -151,7 +152,8 @@ def filter_small_group(cnt_dicts, labels, drawer, do_draw, ratio=0.1):
         for label in set(labels):
             cnts = [cnt_dict['cnt'] for cnt_dict in cnt_dicts if cnt_dict['label']==label]
             img = drawer.draw_same_color(cnts, img)
-        drawer.save(img, '2-6_RemoveSmallGroup')
+        # drawer.save(img, '2-6_RemoveSmallGroup')
+        drawer.save(img, '2-2-1_RemoveSmallGroup')
     return cnt_dicts, labels
 
 

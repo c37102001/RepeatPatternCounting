@@ -61,8 +61,8 @@ def get_features(color_img, contours, drawer, do_draw, filter_by_gradient):
             })
 
         max_distance = max([f['distance'] for f in pixel_features])
-        for f in pixel_features:
-            f['distance'] = f['distance'] / max_distance
+        # for f in pixel_features:
+        #     f['distance'] = f['distance'] / max_distance
 
         # find main rotate angle by fit ellipse
         ellipse = cv2.fitEllipse(contour)   # ((694.17, 662.93), (10.77, 22.17), 171.98)
@@ -126,7 +126,8 @@ def remove_size_outlier(cnt_size, contours, drawer):
 
 def get_cnt_color_gradient(contour, im):
     im_area = im.shape[0] * im.shape[1]
-    cnt_inner = scale_contour(contour, 'inner', im_area)
+    # cnt_inner = scale_contour(contour, 'inner', im_area)
+    cnt_inner = contour
     cnt_outer = scale_contour(contour, 'outer', im_area)
 
     color_gradients = []
@@ -141,7 +142,7 @@ def get_cnt_color_gradient(contour, im):
             gradient = np.sqrt(np.sum((lab_in - lab_out) ** 2))
             color_gradients.append(gradient)
     
-    color_gradients = sorted([g for g in color_gradients if g>0])
+    color_gradients = sorted([g for g in color_gradients if g > 0])
     # color_gradients = color_gradients[len(color_gradients)//2: ]
     # avg_gradient = np.median(color_gradients) if len(color_gradients) else 0
     avg_gradient = sum(color_gradients) / len(color_gradients) if len(color_gradients) else 0
@@ -211,142 +212,4 @@ def get_color_feature(cnt, img):
     avg_lab[0] = avg_lab[0] * 0.5       # lower l chennel
 
     return avg_lab
-
-
-def get_texture_feature(cnt, img):
-    mask = np.zeros(img.shape[:3], np.uint8)
-    # Fill the contour in order to get the inner points
-    cv2.drawContours(mask, [cnt], -1, (255,255,255), -1)      # thickness=-1: the contour interiors are drawn
-    cv2.drawContours(mask, [cnt], -1, (0,0,0), 1)
-
-    x,y,w,h = cv2.boundingRect(cnt)
-    cnt_img = img[y:y+h, x:x+w]
-    cnt_mask = mask[y:y+h, x:x+w]
-
-    # lower gray scale
-    cnt_img = cv2.cvtColor(cnt_img, cv2.COLOR_BGR2LAB)
-    cnt_img[0] = 0
-    cnt_img = cv2.cvtColor(cnt_img, cv2.COLOR_LAB2BGR)
-    
-    cnt_img = (cnt_img * (cnt_mask / 255)).astype(np.uint8)
-    cnt_img = cv2.cvtColor(cnt_img, cv2.COLOR_BGR2GRAY)
-
-    import mahotas
-    hara = mahotas.features.haralick(cnt_img).mean(axis=0)  # (13, 4) > (13)
-    
-    return hara
-
-
-def get_nn_feature(cnt, img, model):
-    mask = np.zeros(img.shape[:3], np.uint8)
-    # Fill the contour in order to get the inner points
-    cv2.drawContours(mask, [cnt], -1, (255,255,255), -1)      # thickness=-1: the contour interiors are drawn
-    cv2.drawContours(mask, [cnt], -1, (0,0,0), 1)
-
-    x,y,w,h = cv2.boundingRect(cnt)
-    cnt_img = img[y:y+h, x:x+w]
-    cnt_mask = mask[y:y+h, x:x+w]
-    
-    cnt_img = (cnt_img * (cnt_mask / 255)).astype(np.uint8)
-    nn_feature = model.get_feature(cnt_img)
-    
-    return nn_feature
-
-
-def make_tsne(fts, n=2):
-    print('[*] Making TSNE...')
-    from sklearn.manifold import TSNE
-    from matplotlib import pyplot as plt
-    tsne = TSNE(n_components=n, init='pca')
-    x = tsne.fit_transform(fts)
-    
-    plt.figure()
-    plt.scatter(x[:,0], x[:,1])
-    plt.title('T-SNE of contour encodings')
-    plt.savefig('TSNE.png')
-    plt.clf()
-
-    return x
-
-
-def make_pca(fts, n=2):
-    print('[*] Making 2D PCA...')
-    from sklearn.decomposition import PCA
-    from matplotlib import pyplot as plt
-    pca = PCA(n_components=n)
-    x = pca.fit_transform(fts)
-    
-    plt.figure()
-    plt.scatter(x[:,0], x[:,1])
-    plt.title('PCA of contour encodings')
-    plt.savefig('PCA_2d.png')
-    plt.clf()
-
-    return x
-
-
-def make_3Dpca(fts, n=3):
-    print('[*] Making 3D PCA...')
-    from sklearn.decomposition import PCA
-    from matplotlib import pyplot as plt
-    from mpl_toolkits.mplot3d import Axes3D
-    pca = PCA(n_components=n)
-    x = pca.fit_transform(fts)
-    
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-    ax.scatter(x[:,0], x[:,1], x[:,2], marker='o')
-    ax.set_xlabel('X-axis')
-    ax.set_ylabel('Y-axis')
-    ax.set_zlabel('Z-axis')
-    plt.title('PCA of contour encodings')
-    plt.savefig('PCA_3d.png')
-    plt.clf()
-
-    return x
-
-
-def get_cnt_img(cnt, img, save_dir):
-
-    mask = np.zeros(img.shape[:3], np.uint8)
-    # Fill the contour in order to get the inner points
-    cv2.drawContours(mask, [cnt], -1, (255,255,255), -1)      # thickness=-1: the contour interiors are drawn
-    # cv2.drawContours(mask, [cnt], -1, (0,0,0), 1)
-
-    x,y,w,h = cv2.boundingRect(cnt)
-    cnt_img = img[y:y+h, x:x+w]
-    cnt_mask = mask[y:y+h, x:x+w]
-    
-    cnt_img = (cnt_img * (cnt_mask / 255)).astype(np.uint8)
-    # draw white contour
-    new_cnt = cnt - np.array([x, y])
-    cv2.drawContours(cnt_img, [new_cnt], -1, (255,255,255), 3)
-    # cv2.imwrite(save_dir, cnt_img)
-    # cv2.imwrite('before.png', cnt_img)
-
-    
-    import torchvision.transforms as transforms
-    cnt_imgs = []
-    for angle in range(0, 360, 45):
-        rotate_transform = transforms.Compose([
-            transforms.ToPILImage(),
-            transforms.RandomRotation((angle, angle), expand=True)
-        ])
-        tran_img = rotate_transform(cnt_img)
-        
-        resize_factor = 32 / max(tran_img.size)
-        resize_transform = transforms.Compose([
-            transforms.Resize((int(tran_img.size[0]*resize_factor), int(tran_img.size[1]*resize_factor))),
-            transforms.Pad(32),
-            transforms.CenterCrop((32, 32)),
-            transforms.ToTensor(),])
-        tran_img = resize_transform(tran_img)
-
-        cnt_imgs.append(tran_img)
-    cnt_imgs = torch.stack(cnt_imgs)    # (8, 3, 32, 32)
-    
-    # cnt_img = cnt_imgs[0].numpy().transpose(1, 2, 0) * 255    # (C, H, W) > (H, W, C)
-    # cv2.imwrite('after.png', cnt_img)
-    
-    return cnt_imgs
 
