@@ -51,6 +51,8 @@ def get_contours(filter_cfg, drawer, edge_img, edge_type, do_draw=False):
 
     # threshold to 0 or 255
     edge_img = cv2.threshold(edge_img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
+    
+    
     if do_draw:
         desc = f'1_{edge_type}-1-1_Threshold'
         drawer.save(edge_img, desc)
