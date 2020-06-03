@@ -66,6 +66,8 @@ def get_clusters(cluster_cfg, contours, cnt_dicts, drawer, do_draw=False, second
 
 
 def hierarchical_clustering(cluster_cfg, feature_list, feature_type, drawer, do_draw=False, second=False):
+    
+    feature_list = np.array(feature_list)
     if len(feature_list) <= 3:
         return [0] * len(feature_list)
 
@@ -74,7 +76,6 @@ def hierarchical_clustering(cluster_cfg, feature_list, feature_type, drawer, do_
     
     # hierarchically link features by order of distance(measured by 'ward'), output a hierarchical tree
     # return ndarray sized [#feature_list-1, 4], 4 means (group idx1, gp idx2, gp_distance, included ele num)
-
     feature_dist_hierarchy = linkage(feature_list, 'ward')
         
     # distance between every two groups, sized [#feature - 1]
@@ -114,8 +115,19 @@ def hierarchical_clustering(cluster_cfg, feature_list, feature_type, drawer, do_
             target_diff_idx += 1
         if target_diff_idx == len(diff_list):
             print(f'[{feature_type}] clustering all in one group!')
-        target_diff = diff_list[min(target_diff_idx, len(diff_list)-1)]
-        # =========================================================================================
+            clusters = [0] * len(feature_list)
+            thres_dist_idx == -1
+            thres_dist_include = 0
+            # TODO: plot
+            return clusters
+        
+        thres_dist_include = dist_list[thres_dist_idx]
+        thres_dist_exclude = dist_list[thres_dist_idx + 1]
+        clusters = fcluster(feature_dist_hierarchy, thres_dist_include, criterion='distance')
+        small_group_shape = np.mean(feature_list[clusters == 1])
+        thres_shape = np.sqrt(thres_dist_include**2 / 128)
+
+    # =========================================================================================
 
     else:
         # ===================  find cut point by absolute threshold value==========================
@@ -138,13 +150,11 @@ def hierarchical_clustering(cluster_cfg, feature_list, feature_type, drawer, do_
     
     # by distance[dist_idx] and distance[dist_idx+1], we get difference[dist_idx(=diff_idx)]
     # and we should take previous one(distance[dist_idx]) as threshold, so we choose thres_dist_idx = target_diff_idx.
-    thres_dist_idx = target_diff_idx
-    thres_dist = dist_list[thres_dist_idx]
 
     # plot difference bar chart
     if do_draw:
-        plt.bar(x=range(len(diff_list)), height=diff_list)
-        plt.title(f'{feature_type} cut idx: {target_diff_idx} | value: {target_diff:.3f}')
+        plt.bar(x=range(len(dist_list)), height=dist_list)
+        plt.title(f'{feature_type} cut idx: {thres_dist_idx} | value: {thres_dist_include:.3f}')
         if not second:
             desc = f'{drawer.img_name}_2-1_{feature_type.capitalize()}Group.png'
         else:
