@@ -41,6 +41,7 @@ edge_path = os.path.join(source_path, path_cfg['edge_dir'])
 if not os.path.exists(img_path):
     raise IOError(f'Image Path "{img_path}" Not Found')
 
+# output image path
 output_path = os.path.join(path_cfg['output_path'], path_cfg['data_name'])
 if not os.path.exists(output_path):
     os.makedirs(output_path)
@@ -48,24 +49,24 @@ elif eval(path_cfg['clear_results']):
     shutil.rmtree(output_path)
     os.makedirs(output_path)
 
-# eval config
-eval_cfg = cfg['evaluate']
-do_eval = eval(eval_cfg['do_eval'])
-eval_csv_path = eval_cfg['eval_csv_path']
+# evaluation path
+cluster_csv_path = os.path.join(source_path, "cluster_csv")
+if not os.path.exists(cluster_csv_path):
+    os.makedirs(cluster_csv_path)
+eval_csv_path = os.path.join(source_path, "eval_csv")
 output1_csv_path = os.path.join(eval_csv_path, 'eval_1.csv')
-if not os.path.exists(output1_csv_path):
-    with open(output1_csv_path, 'w+') as f:
-        f.write('Image name,TP,FP,FN,Precision,Recall,F_measure,Error_rate\n')
+with open(output1_csv_path, 'w+') as f:
+    f.write('Image name,TP,FP,FN,Precision,Recall,F_measure,Error_rate,Time\n')
 output2_csv_path = os.path.join(eval_csv_path, 'eval_2.csv')
-if not os.path.exists(output2_csv_path):
-    with open(output2_csv_path, 'w+') as f:
-        f.write('Image name,TP,FP,FN,Precision,Recall,F_measure,Error_rate\n')
-
+with open(output2_csv_path, 'w+') as f:
+    f.write('Image name,TP,FP,FN,Precision,Recall,F_measure,Error_rate,Time\n')
 
 # architecture config
 arch_cfg = cfg['arch']
 do_second_clus = eval(arch_cfg['do_second_clus'])
 filter_by_gradient = eval(arch_cfg['filter_by_gradient'])
+do_eval = eval(arch_cfg['do_eval'])
+amb_idx = eval(arch_cfg['amb_idx'])
 
 # image config
 img_cfg = cfg['img_cfg']
@@ -75,7 +76,8 @@ else:
     img_list = img_cfg['img_list'].split(',')
     if '-' in img_list[0]:
         img_from, img_end = img_list[0].split('-')
-        img_list = [f'IMG_ ({i}).jpg' for i in range(eval(img_from), eval(img_end) + 1)]
+        # img_list = [f'IMG_ ({i}).jpg' for i in range(eval(img_from), eval(img_end) + 1)]
+        img_list = [f'img ({i}).jpg' for i in range(eval(img_from), eval(img_end) + 1)]
 resize_height = eval(img_cfg['resize_height'])
 file_ext = img_cfg['edge_file_extension']
 use_edge = img_cfg['use_edge'].split(',')
@@ -96,10 +98,10 @@ solidity_thres = eval(obvs_cfg['solidity_thres'])
 
 
 def main(img_file):         # img_file = 'IMG_ (33).jpg'
-
+    
     #======================================== 0. Preprocess ==========================================
     
-
+    start = time.time()
     img_name, img_ext = img_file.rsplit('.', 1)     # ['IMG_ (33)',  'jpg']
     input_img = cv2.imread(img_path + img_file)
     # input_img = do_CLAHE(input_img)
@@ -231,9 +233,7 @@ def main(img_file):         # img_file = 'IMG_ (33).jpg'
 
 
     factors = ['area', 'solidity', 'color_gradient']
-    # factors = ['solidity', 'color_gradient']
     thres_params = [area_thres, solidity_thres, gradient_thres]
-    # thres_params = [solidity_thres, gradient_thres]
     for factor, thres_param in zip(factors, thres_params):
             
         # sorting by factor from small to large
@@ -307,14 +307,15 @@ def main(img_file):         # img_file = 'IMG_ (33).jpg'
     img = cv2.resize(img, (0, 0), fx=1/resize_factor, fy=1/resize_factor)
     img = np.concatenate((input_img, img), axis=1)
     drawer.save(img, '5_FinalResult1')
+    spent = time.time() - start
 
     if do_eval:
-        tp, fp, fn, pr, re, fm, er = evaluate_detection_performance(
-        resi_input_img.copy(), img_file, obvious_group_cnts, resize_factor, eval_csv_path)
+        tp, fp, fn, pr, re, fm, er, _ = evaluate_detection_performance(
+        resi_input_img.copy(), img_file, obvious_group_cnts, resize_factor, eval_csv_path, amb_idx)
     
         with open(output1_csv_path, 'a+') as f:
             writer = csv.writer(f)
-            writer.writerow([img_file, tp, fp, fn, pr, re, fm, er])
+            writer.writerow([img_file, tp, fp, fn, pr, re, fm, er, spent])
 
 
     # draw all contours result
@@ -330,13 +331,19 @@ def main(img_file):         # img_file = 'IMG_ (33).jpg'
     drawer.save(img, '5_FinalResult2')
 
     if do_eval:
-        tp, fp, fn, pr, re, fm, er = evaluate_detection_performance(
-            resi_input_img.copy(), img_file, sencond_group_cnts, resize_factor, eval_csv_path)
+        tp, fp, fn, pr, re, fm, er, group_results = evaluate_detection_performance(
+            resi_input_img.copy(), img_file, sencond_group_cnts, resize_factor, eval_csv_path, amb_idx)
         
         with open(output2_csv_path, 'a+') as f:
             writer = csv.writer(f)
-            writer.writerow([img_file, tp, fp, fn, pr, re, fm, er])
+            writer.writerow([img_file, tp, fp, fn, pr, re, fm, er, spent])
 
+        with open(os.path.join(cluster_csv_path, img_file + '.csv'), 'w+') as f:
+            writer = csv.writer(f)
+            writer.writerows(group_results)
+            
+
+    print(f'Finished in {spent} s')
     print('-----------------------------------------------------------')
 
 
@@ -352,9 +359,8 @@ for i, img_file in enumerate(img_list):
         continue
     
     try:
-        start = time.time()
         main(img_file)
-        print(f'Finished in {time.time() - start} s')
+        
     except KeyboardInterrupt:
         break
     except Exception as e:
