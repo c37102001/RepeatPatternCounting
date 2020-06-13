@@ -50,15 +50,16 @@ _enhance_edge = True
 # Decide whether local/global equalization to use (True-->Local)
 _gray_value_redistribution_local = True
 # Decide if excecute 1st evalution 
-_evaluate = False
+_evaluate = True
 
-input_path = '../data/general/image/'
-# structure forest output
-edge_input_path = '../data/general/edge/SF_matlab/'
-output_path = '../output/legacy_matlabSF/'
+# input_path = '../data/general/image/'
+input_path = '../data/bean_cluster/image/'
+# edge_input_path = '../data/general/edge/SF_matlab/'
+edge_input_path = '../data/bean_cluster/edge/SF/'
+# output_path = '../output/legacy_matlabSF/'
+output_path = '../output/legacy_clus/'
 
-csv_output = '../output_csv_6_8[combine_result_before_filter_obvious]/'
-evaluate_csv_path = '../evaluate_data/groundtruth_csv/generalize_csv/'
+evaluate_csv_path = '../data/bean_cluster/eval_csv/'
 # When doing Canny edge detection , this para decide which channel to be the gradient standard
 _edge_by_channel = ['bgr_gray']
 
@@ -75,7 +76,7 @@ _writeImg = {'original_image': False, 'original_edge': False, 'enhanced_edge': F
 
 _show_resize = [(720, 'height'), (1200, 'width')][0]
 
-test_one_img = {'test': False, 'filename': 'IMG_ (62).jpg'}
+test_one_img = {'test': False, 'filename': 'img (11).jpg'}
 
 
 def main():
@@ -84,7 +85,7 @@ def main():
     min_time = 99999.0
     max_time = 0.0
 
-    evaluation_csv = [['Image name', 'TP', 'FP', 'FN', 'Precision', 'Recall', 'F_measure', 'Error_rate']]
+    evaluation_csv = [['Image name', 'TP', 'FP', 'FN', 'Precision', 'Recall', 'F_measure', 'Error_rate', 'Time']]
 
     # line88 - line113 input exception
     for i, fileName in enumerate(os.listdir(input_path)):
@@ -113,8 +114,8 @@ def main():
         _use_structure_edge = True
         # ============================
 
-        if not os.path.isfile(edge_input_path + fileName[:-4] + '_edge.jpg') and _use_structure_edge:
-            print(edge_input_path + fileName[:-4] + '_edge.jpg')
+        if not os.path.isfile(edge_input_path + fileName[:-4] + '_sf.png') and _use_structure_edge:
+            print(edge_input_path + fileName[:-4] + '_sf.png')
             print('EDGE FILE does not exist!')
             break
 
@@ -141,7 +142,7 @@ def main():
             if _use_structure_edge:
 
                 # read edge image from matlab 
-                edge_image_ori = cv2.imread(edge_input_path + fileName[:-4] + '_edge.jpg', cv2.IMREAD_GRAYSCALE)
+                edge_image_ori = cv2.imread(edge_input_path + fileName[:-4] + '_sf.png', cv2.IMREAD_GRAYSCALE)
                 height, width = edge_image_ori.shape[:2]
                 edged = cv2.resize(edge_image_ori, (0, 0), fx=resize_height / height, fy=resize_height / height)
 
@@ -723,10 +724,14 @@ def main():
                 # end final_nonoverlap_cnt_group for
 
         if _evaluate:
-            resize_ratio = resize_height / float(height)
+            resize_factor = resize_height / float(height)
             tp, fp, fn, pr, re, fm, er = Evaluate_detection_performance(image_resi, fileName, final_group_cnt,
-                                                                        resize_ratio, evaluate_csv_path)
-            evaluation_csv.append([fileName, tp, fp, fn, pr, re, fm, er])
+                                                                        resize_factor, evaluate_csv_path)
+            # evaluation_csv.append([fileName, tp, fp, fn, pr, re, fm, er])
+            with open(evaluate_csv_path + "eval_legacy.csv", 'a+') as f:
+                writer = csv.writer(f)
+                spent_time = time.time() - start_time
+                writer.writerow([fileName, tp, fp, fn, pr, re, fm, er, spent_time])
 
         contour_image = cv2.resize(contour_image, (0, 0), fx=height / resize_height, fy=height / resize_height)
         combine_image = np.concatenate((color_image_ori, contour_image), axis=1)
@@ -748,48 +753,127 @@ def main():
             min_time = each_img_time
             min_time_img = fileName
 
-    if _evaluate:
-        f = open(evaluate_csv_path + 'evaluate-bean.csv', "wb")
-        w = csv.writer(f)
-        w.writerows(evaluation_csv)
-        f.close()
 
     print('img:', max_time_img, ' max_time:', max_time, 's')
     print('img:', min_time_img, 'min_time:', min_time, 's')
 
 
-def Evaluate_detection_performance(img, fileName, final_group_cnt, resize_ratio, evaluate_csv_path):
+def Evaluate_detection_performance(img, img_file, final_group_cnt, resize_factor, evaluate_csv_path):
+    # '''
+    # Evaluation during run time.
+    # The evaluation is about if the contours are 
+    # detected correctly.
+    # The results are compared with the groundtruth.
+    
+    # @param
+    # evaluate_csv_path : read the groundtruth data
+    # '''
+
+    # tp = 0
+    # fp = 0
+    # fn = 0
+    # pr = 0.0
+    # re = 0.0
+    # # Mix the pr and re 
+    # fm = 0.0
+    # # Only compare the count
+    # er = 0.0
+    # groundtruth_list = []
+    # translate_list = [['Group', 'Y', 'X']]
+    # with open(evaluate_csv_path + fileName + '.csv') as csvfile:
+    #     reader = csv.DictReader(csvfile)
+    #     for row in reader:
+    #         # groundtruth_list.append( { 'Group':int(row['Group']), 'X':int(int(row['X'])*resize_factor), 'Y':int(int(row['Y'])*resize_factor) } )
+    #         groundtruth_list.append({'Group': int(row['Group']), 'X': int(row['X']), 'Y': int(row['Y'])})
+
+    # cnt_area_coordinate = Get_Cnt_Area_Coordinate(img, final_group_cnt)
+    # cnt_area_coordinate.sort(key=lambda x: len(x), reverse=False)
+
+    # groundtruth_count = len(groundtruth_list)
+    # program_count = len(cnt_area_coordinate)
+
+    # # _________The 1st Evaluation and the preprocessing of the 2nd evaluation_____________________________
+    # '''
+    # @param
+    # g_dic : the coordinate of one contour in the groundtruth list (g means groundtruth)
+    # cnt_dic : one contour(all pixels' coordinate in a contour area) in the cnt_area_coordinate
+    # cnt_area_coordinate : All contours that the program found in one image 
+    
+    # If g_dic is in cnt_dic (which means one of the groundtruth contours matches one of the contours that the program found),
+    # save both label of cnt_dic and the coordinate of g_dic in the translate list.
+    # '''
+    # for g_dic in groundtruth_list:
+    #     for cnt_dic in cnt_area_coordinate:
+    #         if [int(g_dic['Y'] * resize_factor), int(g_dic['X'] * resize_factor)] in cnt_dic['coordinate']:
+    #             tp += 1
+    #             cnt_area_coordinate.remove(cnt_dic)
+    #             translate_list.append([cnt_dic['label'], g_dic['Y'], g_dic['X']])
+    #             break
+
+    # '''Make a csv that save the translate list.'''
+    # f = open(csv_output + fileName[:-4] + '.csv', "wb")
+    # w = csv.writer(f)
+    # w.writerows(translate_list)
+    # f.close()
+
+    # fp = program_count - tp
+    # fn = groundtruth_count - tp
+
+    # if tp + fp > 0:
+    #     pr = tp / float(tp + fp)
+    # if tp + fn > 0:
+    #     re = tp / float(tp + fn)
+    # if pr + re > 0:
+    #     fm = 2 * pr * re / (pr + re)
+    # if groundtruth_count > 0:
+    #     er = abs(program_count - groundtruth_count) / float(groundtruth_count)
+    # print(program_count, groundtruth_count)
+    # return tp, fp, fn, pr, re, fm, er
+
     '''
     Evaluation during run time.
-    The evaluation is about if the contours are 
+    The evaluation is about if the contours are
     detected correctly.
     The results are compared with the groundtruth.
-    
+
     @param
     evaluate_csv_path : read the groundtruth data
     '''
+    ori_img_height, ori_img_width = img.shape[0]/resize_factor, img.shape[1]/resize_factor
 
+    if 720 / ori_img_height < 1200 / ori_img_width:
+        resize_factor = 736 / 720
+    else:
+        resize_factor = (ori_img_width / 1200) * (736 / ori_img_height)
+    
     tp = 0
     fp = 0
     fn = 0
     pr = 0.0
     re = 0.0
-    # Mix the pr and re 
+    # Mix the pr and re
     fm = 0.0
     # Only compare the count
     er = 0.0
+    AMBIGUOUS_IDX = 1
     groundtruth_list = []
-    translate_list = [['Group', 'Y', 'X']]
-    with open(evaluate_csv_path + fileName + '.csv') as csvfile:
+    ambiguous_count = 0
+    with open(os.path.join(evaluate_csv_path , img_file + '.csv')) as csvfile:
         reader = csv.DictReader(csvfile)
         for row in reader:
-            # groundtruth_list.append( { 'Group':int(row['Group']), 'X':int(int(row['X'])*resize_ratio), 'Y':int(int(row['Y'])*resize_ratio) } )
-            groundtruth_list.append({'Group': int(row['Group']), 'X': int(row['X']), 'Y': int(row['Y'])})
+            if int(row['Group']) == AMBIGUOUS_IDX:
+                groundtruth_list.append({'Group': int(row['Group']), 
+                                        'X': int(eval(row['X']) * resize_factor), 
+                                        'Y': int(eval(row['Y']) * resize_factor)})
+                ambiguous_count += 1
+            else:
+                groundtruth_list.insert(0, {'Group': int(row['Group']), 
+                                            'X': int(eval(row['X']) * resize_factor), 
+                                            'Y': int(eval(row['Y']) * resize_factor)})
+    groundtruth_count = len(groundtruth_list) - ambiguous_count
 
     cnt_area_coordinate = Get_Cnt_Area_Coordinate(img, final_group_cnt)
     cnt_area_coordinate.sort(key=lambda x: len(x), reverse=False)
-
-    groundtruth_count = len(groundtruth_list)
     program_count = len(cnt_area_coordinate)
 
     # _________The 1st Evaluation and the preprocessing of the 2nd evaluation_____________________________
@@ -798,23 +882,20 @@ def Evaluate_detection_performance(img, fileName, final_group_cnt, resize_ratio,
     g_dic : the coordinate of one contour in the groundtruth list (g means groundtruth)
     cnt_dic : one contour(all pixels' coordinate in a contour area) in the cnt_area_coordinate
     cnt_area_coordinate : All contours that the program found in one image 
-    
+
     If g_dic is in cnt_dic (which means one of the groundtruth contours matches one of the contours that the program found),
     save both label of cnt_dic and the coordinate of g_dic in the translate list.
     '''
+    counted_cnt_dics = []
     for g_dic in groundtruth_list:
         for cnt_dic in cnt_area_coordinate:
-            if [int(g_dic['Y'] * resize_ratio), int(g_dic['X'] * resize_ratio)] in cnt_dic['coordinate']:
-                tp += 1
-                cnt_area_coordinate.remove(cnt_dic)
-                translate_list.append([cnt_dic['label'], g_dic['Y'], g_dic['X']])
+            if [int(g_dic['Y']), int(g_dic['X'])] in cnt_dic and cnt_dic not in counted_cnt_dics:
+                if int(g_dic['Group']) == AMBIGUOUS_IDX:
+                    program_count -= 1
+                else:
+                    tp += 1
+                counted_cnt_dics.append(cnt_dic)
                 break
-
-    '''Make a csv that save the translate list.'''
-    f = open(csv_output + fileName[:-4] + '.csv', "wb")
-    w = csv.writer(f)
-    w.writerows(translate_list)
-    f.close()
 
     fp = program_count - tp
     fn = groundtruth_count - tp
@@ -827,7 +908,8 @@ def Evaluate_detection_performance(img, fileName, final_group_cnt, resize_ratio,
         fm = 2 * pr * re / (pr + re)
     if groundtruth_count > 0:
         er = abs(program_count - groundtruth_count) / float(groundtruth_count)
-    print(program_count, groundtruth_count)
+    # print(tp, groundtruth)
+    print(f"Precision: {pr:.2f}, Recall: {re:.2f}")
     return tp, fp, fn, pr, re, fm, er
     # _____________________1 st evaluation end__________________________________________________
 

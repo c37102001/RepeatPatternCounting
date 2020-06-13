@@ -5,6 +5,8 @@ from ipdb import set_trace as pdb
 import itertools
 from tqdm import tqdm
 import csv
+import os
+
 
 def do_CLAHE(img):
     b,g,r = cv2.split(img)
@@ -155,7 +157,7 @@ def filter_small_group(cnt_dicts, labels, drawer, do_draw, ratio=0.1):
     return cnt_dicts, labels
 
 
-def evaluate_detection_performance(img, img_file, final_group_cnt, resize_factor, evaluate_csv_path):
+def evaluate_detection_performance(img, img_file, final_group_cnt, resize_factor, evaluate_csv_path, amb_idx):
     '''
     Evaluation during run time.
     The evaluation is about if the contours are
@@ -182,17 +184,19 @@ def evaluate_detection_performance(img, img_file, final_group_cnt, resize_factor
     # Only compare the count
     er = 0.0
     groundtruth_list = []
-    translate_list = [['Group', 'Y', 'X']]
-    with open(evaluate_csv_path + img_file + '.csv') as csvfile:
+    ambiguous_count = 0
+    with open(os.path.join(evaluate_csv_path , img_file + '.csv')) as csvfile:
         reader = csv.DictReader(csvfile)
         for row in reader:
-            groundtruth_list.append({'Group': int(row['Group']), 
-                                     'X': int(eval(row['X']) * resize_factor), 
-                                     'Y': int(eval(row['Y']) * resize_factor)})
+            if int(row['Group']) == amb_idx:
+                groundtruth_list.append({'Group': int(row['Group']), 'X': eval(row['X']), 'Y': eval(row['Y'])})
+                ambiguous_count += 1
+            else:
+                groundtruth_list.insert(0, {'Group': int(row['Group']), 'X': eval(row['X']), 'Y': eval(row['Y'])})
+    groundtruth_count = len(groundtruth_list) - ambiguous_count
+
     cnt_area_coordinate = Get_Cnt_Area_Coordinate(img, final_group_cnt)
     cnt_area_coordinate.sort(key=lambda x: len(x), reverse=False)
-
-    groundtruth_count = len(groundtruth_list)
     program_count = len(cnt_area_coordinate)
 
     # _________The 1st Evaluation and the preprocessing of the 2nd evaluation_____________________________
@@ -206,12 +210,17 @@ def evaluate_detection_performance(img, img_file, final_group_cnt, resize_factor
     save both label of cnt_dic and the coordinate of g_dic in the translate list.
     '''
     counted_cnt_dics = []
+    group_results = [['Group', 'Y', 'X']]
     for g_dic in groundtruth_list:
-        for cnt_dic in cnt_area_coordinate:
-            if [int(g_dic['Y']), int(g_dic['X'])] in cnt_dic and cnt_dic not in counted_cnt_dics:
-                tp += 1
+        for group_idx, cnt_dic in cnt_area_coordinate:
+            if [int(g_dic['Y'] * resize_factor), int(g_dic['X'] * resize_factor)] in cnt_dic and \
+                cnt_dic not in counted_cnt_dics:
+                if int(g_dic['Group']) == amb_idx:
+                    program_count -= 1
+                else:
+                    tp += 1
+                    group_results.append([group_idx, g_dic['Y'], g_dic['X']])
                 counted_cnt_dics.append(cnt_dic)
-                translate_list.append([g_dic['Group'], g_dic['Y'], g_dic['X']])
                 break
 
     fp = program_count - tp
@@ -227,7 +236,7 @@ def evaluate_detection_performance(img, img_file, final_group_cnt, resize_factor
         er = abs(program_count - groundtruth_count) / float(groundtruth_count)
     # print(tp, groundtruth)
     print(f"Precision: {pr:.2f}, Recall: {re:.2f}")
-    return tp, fp, fn, pr, re, fm, er
+    return tp, fp, fn, pr, re, fm, er, group_results
     # _____________________1 st evaluation end__________________________________________________
 
 
@@ -241,13 +250,13 @@ def Get_Cnt_Area_Coordinate(img, final_group_cnt):
     cnt_area_coordinate = []
     blank_img = np.zeros(img.shape[:2], np.uint8)
 
-    for cnt_group in final_group_cnt:
+    for group_idx, cnt_group in enumerate(final_group_cnt, start=1):
         for cnt in cnt_group:
             blank_img[:] = 0
             cv2.drawContours(blank_img, [cnt], -1, 255, -1)
             # cv2.imshow('blank',blank_img)
             # cv2.waitKey(0)
             # use argwhere to find all coordinate which value == 1 ( cnt area )
-            cnt_area_coordinate.append((np.argwhere(blank_img == 255)).tolist())
+            cnt_area_coordinate.append([group_idx, (np.argwhere(blank_img == 255)).tolist()])
 
     return cnt_area_coordinate
