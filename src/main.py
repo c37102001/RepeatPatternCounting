@@ -104,9 +104,9 @@ def main(img_file):         # img_file = 'IMG_ (33).jpg'
     start = time.time()
     img_name, img_ext = img_file.rsplit('.', 1)     # ['IMG_ (33)',  'jpg']
     input_img = cv2.imread(img_path + img_file)
+    # input_img = do_CLAHE(input_img)
     
     img_height = input_img.shape[0]               # shape: (1365, 2048, 3)
-    img_width = input_img.shape[1]
     resize_factor = resize_height / img_height  # resize_height=736, shape: (1365, 2048, 3) -> (736,1104,3)
     resi_input_img = cv2.resize(input_img, (0, 0), fx=resize_factor, fy=resize_factor)
     
@@ -124,10 +124,10 @@ def main(img_file):         # img_file = 'IMG_ (33).jpg'
         
         # get edge image
         if edge_type == 'Canny':
-            edge_img = canny_edge_detect(input_img.copy())
+            edge_img = canny_edge_detect(resi_input_img.copy())
 
         elif edge_type == 'Sobel':
-            edge_img = sobel_edge_detect(input_img.copy())
+            edge_img = sobel_edge_detect(resi_input_img.copy())
 
         else:
             edge_folder_path = os.path.join(edge_path, edge_type)
@@ -148,16 +148,19 @@ def main(img_file):         # img_file = 'IMG_ (33).jpg'
                     make_single_sf(input_img, edge_img_path)
 
             edge_img = cv2.imread(edge_img_path, cv2.IMREAD_GRAYSCALE)
-            edge_img = cv2.resize(edge_img, (img_width, img_height))
+            edge_img = cv2.resize(edge_img, (0, 0), fx=resize_factor, fy=resize_factor)     # shape: (736, *)
+
+            # sobel = sobel_edge_detect(resi_input_img.copy())
+            # edge_img = (0.5 * sobel + 0.5 * edge_img).astype(np.uint8)
+
+            # canny = edge_img = canny_edge_detect(resi_input_img.copy())
+            # sobel = sobel_edge_detect(resi_input_img.copy())
+            # edge_img = (0.2 * canny + 0.4 * sobel + 0.4 * edge_img).astype(np.uint8)
             
-            sobel = sobel_edge_detect(input_img.copy())
-            edge_img = (0.7 * sobel + 0.3 * edge_img).astype(np.uint8)
-            
-        edge_img = cv2.resize(edge_img, (0, 0), fx=resize_factor, fy=resize_factor)     # shape: (736, *)
-            
+
         # Find and filter contours
         contours.extend(get_contours(filter_cfg, drawer, edge_img, edge_type, do_draw))
-    
+
     if do_draw:
         drawer.save(drawer.draw(contours), '2_CombineCnts')
     # return
@@ -237,16 +240,8 @@ def main(img_file):         # img_file = 'IMG_ (33).jpg'
         group_dicts.sort(key=lambda group_dict: group_dict[factor], reverse=False)
         factor_list = [group[factor] for group in group_dicts]
         
-        if len(factor_list) == 1:
-            obvious_index = 0
-        elif factor == 'area':
-            obvious_index = len(factor_list) - 1
-        else:
-            diff = np.diff(factor_list)
-            obvious_index = np.where(diff == max(diff))[0][0] + 1
-            
+        obvious_index = len(factor_list) - 1
         obvious_value = factor_list[obvious_index]
-
         thres = obvious_value * thres_param
 
         if factor == 'color_gradient':
@@ -254,21 +249,14 @@ def main(img_file):         # img_file = 'IMG_ (33).jpg'
                 thres = 0
             elif thres > 100:
                 thres = 100
-            # else:
-                # thres = max(thres, 90) if factor_list[-1] > 100 else min(thres, 90)
         
-        # thres = min(thres, 90) if factor == 'color_gradient' else thres # TODO
         for i, factor_value in enumerate(factor_list[:obvious_index]):
             if factor_value > thres:
                 obvious_index = i
                 break
 
         for group in group_dicts[obvious_index:]:
-            # TODO
-            if factor == 'solidity':
-                group['votes'] += 10
-            else:
-                group['votes'] += 1
+            group['votes'] += 1
 
         if do_draw or True:
             img = drawer.blank_img()
@@ -316,7 +304,7 @@ def main(img_file):         # img_file = 'IMG_ (33).jpg'
 
 
     # draw all contours result
-    second_obvious_groups = [g for g in group_dicts if g['votes'] > 10]
+    second_obvious_groups = [g for g in group_dicts if g['votes'] >= most_votes-1]
     sencond_group_cnts = [group['group_cnts'] for group in second_obvious_groups]
     print(f'Priority2 Groups: {len(second_obvious_groups)} (cnt num: {[len(g["group_cnts"]) for g in second_obvious_groups]})')
     

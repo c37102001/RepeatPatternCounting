@@ -2,12 +2,10 @@ import cv2
 import numpy as np
 from utils import add_border_edge
 from ipdb import set_trace as pdb
-from edge_detection import canny_edge_detect, sobel_edge_detect
 
 
 def get_contours(filter_cfg, drawer, edge_img, edge_type, do_draw=False):
     ''' Do contour detection, filter contours, feature extract and cluster.
-
     Args:
         edge_img: (ndarray) edge img element 0~255, sized [736, N]
         edge_type: (str) edge type name
@@ -32,41 +30,26 @@ def get_contours(filter_cfg, drawer, edge_img, edge_type, do_draw=False):
 
     # do CLAHE
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(9, 9))
-    edge_img = cv2.bilateralFilter(edge_img, 5, 150, 150)
     edge_img = clahe.apply(edge_img)
     if do_draw:
         desc = f'1_{edge_type}-1_EnhancedEdge'
         drawer.save(edge_img, desc)
-    
-    
-    # median filter
-    if not edge_type == 'Canny':
-        # from scipy.signal import medfilt
-        # edge_img = medfilt(edge_img, 3).astype(np.uint8)
-        # edge_img = cv2.bilateralFilter(edge_img, 5, 30, 30)
-        edge_img = cv2.GaussianBlur(edge_img, (3, 3), 0)
-        if do_draw:
-            desc = f'1_{edge_type}-1-1_MF'
-            drawer.save(edge_img, desc)
 
     # threshold to 0 or 255
     edge_img = cv2.threshold(edge_img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
-    
-    
     if do_draw:
         desc = f'1_{edge_type}-1-1_Threshold'
         drawer.save(edge_img, desc)
 
-
     # morphology close
-    # if not edge_type == 'SF':
     kernel_size = min(edge_img.shape) // 100
-    # kernel_size = sum(edge_img.shape) // 200
+    # kernel_size = 3
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel_size, kernel_size))
     edge_img = cv2.morphologyEx(edge_img, cv2.MORPH_CLOSE, kernel)
     if do_draw:
         desc = f'1_{edge_type}-1-2_closeEdge'
         drawer.save(edge_img, desc)
+
     
 
     # add edge on border
@@ -107,26 +90,13 @@ def filter_contours(filter_cfg, contours, re_height, re_width, drawer):
     for i, contour in enumerate(contours):
         area = cv2.contourArea(contour)
         perimeter = cv2.arcLength(contour, closed=True)
-        approx = cv2.approxPolyDP(contour, 0.05 * perimeter, True)
         if not MIN_CNT_AREA <= area <= MAX_CNT_AREA:
             continue
-        if len(approx) <= 2:
-            continue
         if area / perimeter < MIN_AREA_OVER_PERI:
-            convex, convex_peri = get_convex_contour(contour, drawer)
-
-            # count how many countour points are close to its convex
-            dists = [abs(cv2.pointPolygonTest(convex, tuple(point[0]), True)) for point in contour]
-            cnt_points_in_convex = sum([1 for dist in dists if dist <= convex_peri * 0.02])
-            
-            # if original contour covers more than 80% to its convex contour, replace it with convex.
-            # cnt_points_in_convex is divided b 2 because it's line-shape overlap contour.
-            if cnt_points_in_convex / 2 > len(convex) * 0.8:
-                accept_contours.append(convex)
-            
             continue
         
         # change some contours into convex
+        approx = cv2.approxPolyDP(contour, 0.05 * perimeter, True)
         if len(approx) <= 8:
             convex, convex_peri = get_convex_contour(contour, drawer)
             dists = [abs(cv2.pointPolygonTest(contour, tuple(point[0]), True)) for point in convex]
